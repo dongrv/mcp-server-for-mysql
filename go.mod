@@ -1,4 +1,4 @@
-module github.com/dongrv/mcp-mysql
+module github.com/dongrv/mcp-server-for-mysql
 
 go 1.23.0
 
