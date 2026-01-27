@@ -397,7 +397,6 @@ mcp-server-for-mysql/
 ├── start.sh          # Linux/macOS 启动脚本
 ├── start.bat         # Windows 启动脚本
 ├── zed-config-example.json # Zed 编辑器配置示例
-├── NEW_FEATURES_EXAMPLES.md # 新功能使用示例
 ├── CODE_OPTIMIZATION_SUMMARY.md # 代码优化总结
 ├── TOOLS_SCHEMA.md # 工具 JSON Schema 文档
 └── internal/tools/schema/ # Schema 定义源代码
@@ -604,7 +603,7 @@ Apache License License - 详见 [LICENSE](LICENSE) 文件
 
 - **项目仓库**: [GitHub Repository](https://github.com/dongrv/mcp-server-for-mysql)
 - **问题反馈**: [GitHub Issues](https://github.com/dongrv/mcp-server-for-mysql/issues)
-- **文档**: [README.md](README.md) | [NEW_FEATURES_EXAMPLES.md](NEW_FEATURES_EXAMPLES.md) | [TOOLS_SCHEMA.md](TOOLS_SCHEMA.md)
+- **文档**: [README.md](README.md) | [TOOLS_SCHEMA.md](TOOLS_SCHEMA.md)
 
 ## 🙏 致谢
 
