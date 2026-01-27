@@ -1,7 +1,7 @@
 # MySQL MCP Server for Zed Editor
 
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-blue)](https://golang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%20License-green)](LICENSE)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Protocol-blueviolet)](https://spec.modelcontextprotocol.io/)
 
 一个基于 Golang MCP 标准库的 MySQL 服务器，为 Zed 编辑器提供完整的数据库管理功能。采用 Google Go 最佳实践设计，代码结构清晰，易于维护和扩展。
