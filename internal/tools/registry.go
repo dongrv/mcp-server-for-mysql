@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/dongrv/mcp-server-for-mysql/internal/mysql"
+	"github.com/dongrv/mcp-server-for-mysql/internal/tools/schema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -92,18 +93,47 @@ func (r *Registry) RegisterAll(server *mcp.Server, pool *mysql.Pool, txManager *
 		NewCopyTableStructureHandler(pool),
 	}
 
+	// Get all tool schemas
+	toolSchemas := schema.GetToolSchemas()
+
 	// Register handlers
 	for _, handler := range handlers {
 		if err := r.Register(handler); err != nil {
 			return fmt.Errorf("failed to register handler %s: %w", handler.Name(), err)
 		}
 
-		// Register with MCP server using automatic schema inference
-		// We use map[string]interface{} for input and output to allow any JSON structure
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        handler.Name(),
-			Description: handler.Description(),
-		}, func(ctx context.Context, req *mcp.CallToolRequest, input map[string]interface{}) (*mcp.CallToolResult, map[string]interface{}, error) {
+		// Get schema for this tool
+		toolSchema, hasSchema := toolSchemas[handler.Name()]
+
+		// Create MCP tool with or without schema
+		var mcpTool *mcp.Tool
+		if hasSchema {
+			// Parse the JSON Schema
+			var inputSchema map[string]interface{}
+			if err := json.Unmarshal(toolSchema.InputSchema, &inputSchema); err == nil {
+				// Create tool with schema
+				mcpTool = &mcp.Tool{
+					Name:        handler.Name(),
+					Description: handler.Description(),
+					InputSchema: inputSchema,
+				}
+			} else {
+				// Fallback to tool without schema if parsing fails
+				mcpTool = &mcp.Tool{
+					Name:        handler.Name(),
+					Description: handler.Description(),
+				}
+			}
+		} else {
+			// Tool without schema
+			mcpTool = &mcp.Tool{
+				Name:        handler.Name(),
+				Description: handler.Description(),
+			}
+		}
+
+		// Register with MCP server
+		mcp.AddTool(server, mcpTool, func(ctx context.Context, req *mcp.CallToolRequest, input map[string]interface{}) (*mcp.CallToolResult, map[string]interface{}, error) {
 			result, output, err := handler.Handle(ctx, req)
 			if err != nil {
 				return nil, nil, err

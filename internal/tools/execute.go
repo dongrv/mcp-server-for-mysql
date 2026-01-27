@@ -12,7 +12,7 @@ import (
 
 // ExecuteParams represents the parameters for the mysql_execute tool.
 type ExecuteParams struct {
-	SQL        string   `json:"sql"`
+	Query      string   `json:"query"`
 	Parameters []string `json:"parameters,omitempty"`
 }
 
@@ -39,12 +39,12 @@ func (h *ExecuteHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (
 		return nil, nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	if params.SQL == "" {
+	if params.Query == "" {
 		return nil, nil, fmt.Errorf("SQL cannot be empty")
 	}
 
 	// Execute SQL
-	result, err := h.pool.ExecContext(ctx, params.SQL, convertParams(params.Parameters)...)
+	result, err := h.pool.ExecContext(ctx, params.Query, convertParams(params.Parameters)...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("execute failed: %w", err)
 	}
@@ -57,7 +57,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (
 	response := map[string]interface{}{
 		"rows_affected":  rowsAffected,
 		"last_insert_id": lastInsertID,
-		"sql":            params.SQL,
+		"sql":            params.Query,
 	}
 
 	return &mcp.CallToolResult{
