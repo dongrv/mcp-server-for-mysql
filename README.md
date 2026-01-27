@@ -372,7 +372,6 @@ cat TOOLS_SCHEMA.md
 mcp-server-for-mysql/
 ├── cmd/                    # 应用程序入口
 │   ├── main.go            # 主程序入口（已重构）
-│   └── test_main.go       # 单元测试入口
 ├── internal/              # 内部包（外部不可导入）
 │   ├── config/           # 配置管理
 │   │   └── config.go     # 统一的配置结构
@@ -560,7 +559,7 @@ go run cmd/test_schema.go
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+Apache License License - 详见 [LICENSE](LICENSE) 文件
 
 ## 🤝 贡献指南
 
@@ -603,8 +602,8 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 📞 联系方式
 
-- **项目仓库**: [GitHub Repository](https://github.com/yourusername/mcp-server-for-mysql)
-- **问题反馈**: [GitHub Issues](https://github.com/yourusername/mcp-server-for-mysql/issues)
+- **项目仓库**: [GitHub Repository](https://github.com/dongrv/mcp-server-for-mysql)
+- **问题反馈**: [GitHub Issues](https://github.com/dongrv/mcp-server-for-mysql/issues)
 - **文档**: [README.md](README.md) | [NEW_FEATURES_EXAMPLES.md](NEW_FEATURES_EXAMPLES.md) | [TOOLS_SCHEMA.md](TOOLS_SCHEMA.md)
 
 ## 🙏 致谢
