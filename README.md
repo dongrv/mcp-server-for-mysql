@@ -558,7 +558,7 @@ go run cmd/test_schema.go
 
 ## 📄 许可证
 
-Apache License License - 详见 [LICENSE](LICENSE) 文件
+Apache License - 详见 [LICENSE](LICENSE) 文件
 
 ## 🤝 贡献指南
 
