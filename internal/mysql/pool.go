@@ -123,7 +123,7 @@ func (p *Pool) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error
 }
 
 // ExecContext executes a query without returning any rows.
-func (p *Pool) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (p *Pool) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	p.mu.RLock()
 	db := p.db
 	p.mu.RUnlock()
@@ -136,7 +136,7 @@ func (p *Pool) ExecContext(ctx context.Context, query string, args ...interface{
 }
 
 // QueryContext executes a query that returns rows.
-func (p *Pool) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (p *Pool) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	p.mu.RLock()
 	db := p.db
 	p.mu.RUnlock()
@@ -149,7 +149,7 @@ func (p *Pool) QueryContext(ctx context.Context, query string, args ...interface
 }
 
 // QueryRowContext executes a query that is expected to return at most one row.
-func (p *Pool) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (p *Pool) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	p.mu.RLock()
 	db := p.db
 	p.mu.RUnlock()

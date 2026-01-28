@@ -74,7 +74,7 @@ func (h *CreateIndexHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"index_name": params.IndexName,
 		"columns":    params.Columns,
@@ -130,7 +130,7 @@ func (h *DropIndexHandler) Handle(ctx context.Context, req *mcp.CallToolRequest)
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"index_name": params.IndexName,
 		"sql":        sql,
@@ -185,10 +185,10 @@ func (h *ListIndexesHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Process results
-	var results []map[string]interface{}
+	var results []map[string]any
 	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
+		valuePtrs := make([]any, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -198,7 +198,7 @@ func (h *ListIndexesHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 		}
 
 		// Convert values to appropriate types
-		rowData := make(map[string]interface{})
+		rowData := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
@@ -215,7 +215,7 @@ func (h *ListIndexesHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"indexes":    results,
 		"count":      len(results),

@@ -57,10 +57,10 @@ func (h *QueryHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (*m
 	}
 
 	// Process results
-	var results []map[string]interface{}
+	var results []map[string]any
 	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
+		valuePtrs := make([]any, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -70,7 +70,7 @@ func (h *QueryHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (*m
 		}
 
 		// Convert values to appropriate types
-		rowData := make(map[string]interface{})
+		rowData := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
@@ -87,7 +87,7 @@ func (h *QueryHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (*m
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"results": results,
 		"count":   len(results),
 		"query":   params.Query,

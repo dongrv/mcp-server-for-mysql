@@ -54,7 +54,7 @@ func (h *ExecuteHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (
 	lastInsertID, _ := result.LastInsertId()
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"rows_affected":  rowsAffected,
 		"last_insert_id": lastInsertID,
 		"sql":            params.Query,

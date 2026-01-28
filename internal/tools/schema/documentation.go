@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // GenerateMarkdownDocumentation generates markdown documentation for all tools.
@@ -87,7 +88,7 @@ func GenerateMarkdownDocumentation() string {
 			builder.WriteString(fmt.Sprintf("**Description**: %s\n\n", schema.Description))
 
 			// Parse and format schema
-			var schemaObj map[string]interface{}
+			var schemaObj map[string]any
 			if err := json.Unmarshal(schema.InputSchema, &schemaObj); err == nil {
 				builder.WriteString("**Input Schema**:\n\n")
 				builder.WriteString("```json\n")
@@ -96,7 +97,7 @@ func GenerateMarkdownDocumentation() string {
 				builder.WriteString("\n```\n\n")
 
 				// Extract required fields
-				if required, ok := schemaObj["required"].([]interface{}); ok && len(required) > 0 {
+				if required, ok := schemaObj["required"].([]any); ok && len(required) > 0 {
 					builder.WriteString("**Required Fields**:\n\n")
 					for _, field := range required {
 						builder.WriteString(fmt.Sprintf("- `%s`\n", field))
@@ -105,10 +106,10 @@ func GenerateMarkdownDocumentation() string {
 				}
 
 				// Extract properties
-				if properties, ok := schemaObj["properties"].(map[string]interface{}); ok && len(properties) > 0 {
+				if properties, ok := schemaObj["properties"].(map[string]any); ok && len(properties) > 0 {
 					builder.WriteString("**Properties**:\n\n")
 					for propName, propValue := range properties {
-						propMap, ok := propValue.(map[string]interface{})
+						propMap, ok := propValue.(map[string]any)
 						if !ok {
 							continue
 						}
@@ -120,7 +121,7 @@ func GenerateMarkdownDocumentation() string {
 						if propType, ok := propMap["type"].(string); ok && propType != "" {
 							builder.WriteString(fmt.Sprintf("  - **Type**: `%s`\n", propType))
 						}
-						if enum, ok := propMap["enum"].([]interface{}); ok && len(enum) > 0 {
+						if enum, ok := propMap["enum"].([]any); ok && len(enum) > 0 {
 							builder.WriteString("  - **Allowed Values**: ")
 							enumStrs := make([]string, len(enum))
 							for i, e := range enum {
@@ -196,11 +197,11 @@ func GenerateJSONSchemaDocument() (string, error) {
 	schemas := GetToolSchemas()
 
 	// Create a map of all schemas
-	schemaMap := make(map[string]interface{})
+	schemaMap := make(map[string]any)
 	for name, schema := range schemas {
-		var schemaObj map[string]interface{}
+		var schemaObj map[string]any
 		if err := json.Unmarshal(schema.InputSchema, &schemaObj); err == nil {
-			schemaMap[name] = map[string]interface{}{
+			schemaMap[name] = map[string]any{
 				"name":        schema.Name,
 				"description": schema.Description,
 				"schema":      schemaObj,
@@ -209,12 +210,12 @@ func GenerateJSONSchemaDocument() (string, error) {
 	}
 
 	// Create the complete document
-	document := map[string]interface{}{
+	document := map[string]any{
 		"title":       "MySQL MCP Tools JSON Schema",
 		"description": "Complete JSON Schema definitions for all MySQL MCP tools",
 		"version":     "1.0.0",
 		"tools":       schemaMap,
-		"timestamp":   "2024-01-01T00:00:00Z",
+		"timestamp":   time.Now().UTC().Format(time.DateTime),
 	}
 
 	// Marshal with indentation

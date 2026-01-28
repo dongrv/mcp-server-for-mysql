@@ -106,7 +106,7 @@ func (h *AddColumnsHandler) Handle(ctx context.Context, req *mcp.CallToolRequest
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name":    params.TableName,
 		"added_columns": len(params.Columns),
 		"executed_sqls": executedSQLs,
@@ -173,7 +173,7 @@ func (h *DropColumnsHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name":      params.TableName,
 		"dropped_columns": len(params.Columns),
 		"executed_sqls":   executedSQLs,
@@ -252,7 +252,7 @@ func (h *ModifyColumnsHandler) Handle(ctx context.Context, req *mcp.CallToolRequ
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name":       params.TableName,
 		"modified_columns": len(params.Columns),
 		"executed_sqls":    executedSQLs,

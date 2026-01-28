@@ -61,7 +61,7 @@ func (h *ListTablesHandler) Handle(ctx context.Context, req *mcp.CallToolRequest
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tables": tables,
 		"count":  len(tables),
 	}
@@ -114,10 +114,10 @@ func (h *DescribeTableHandler) Handle(ctx context.Context, req *mcp.CallToolRequ
 	}
 
 	// Process results
-	var results []map[string]interface{}
+	var results []map[string]any
 	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
+		valuePtrs := make([]any, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -127,7 +127,7 @@ func (h *DescribeTableHandler) Handle(ctx context.Context, req *mcp.CallToolRequ
 		}
 
 		// Convert values to appropriate types
-		rowData := make(map[string]interface{})
+		rowData := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
@@ -144,7 +144,7 @@ func (h *DescribeTableHandler) Handle(ctx context.Context, req *mcp.CallToolRequ
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"columns":    results,
 	}
@@ -194,7 +194,7 @@ func (h *CreateTableHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"sql":        sql,
 		"message":    "Table created successfully",
@@ -242,7 +242,7 @@ func (h *DropTableHandler) Handle(ctx context.Context, req *mcp.CallToolRequest)
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"table_name": params.TableName,
 		"sql":        sql,
 		"message":    "Table dropped successfully",

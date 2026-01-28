@@ -109,7 +109,7 @@ func (r *Registry) RegisterAll(server *mcp.Server, pool *mysql.Pool, txManager *
 		var mcpTool *mcp.Tool
 		if hasSchema {
 			// Parse the JSON Schema
-			var inputSchema map[string]interface{}
+			var inputSchema map[string]any
 			if err := json.Unmarshal(toolSchema.InputSchema, &inputSchema); err == nil {
 				// Create tool with schema
 				mcpTool = &mcp.Tool{
@@ -133,17 +133,17 @@ func (r *Registry) RegisterAll(server *mcp.Server, pool *mysql.Pool, txManager *
 		}
 
 		// Register with MCP server
-		mcp.AddTool(server, mcpTool, func(ctx context.Context, req *mcp.CallToolRequest, input map[string]interface{}) (*mcp.CallToolResult, map[string]interface{}, error) {
+		mcp.AddTool(server, mcpTool, func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, map[string]any, error) {
 			result, output, err := handler.Handle(ctx, req)
 			if err != nil {
 				return nil, nil, err
 			}
-			// Convert output to map[string]interface{} if needed
-			if outputMap, ok := output.(map[string]interface{}); ok {
+			// Convert output to map[string]any if needed
+			if outputMap, ok := output.(map[string]any); ok {
 				return result, outputMap, nil
 			}
 			// If output is not a map, wrap it
-			return result, map[string]interface{}{"result": output}, nil
+			return result, map[string]any{"result": output}, nil
 		})
 	}
 
@@ -177,7 +177,7 @@ func (h *baseHandler) Description() string {
 }
 
 // formatJSON formats data as indented JSON.
-func formatJSON(data interface{}) string {
+func formatJSON(data any) string {
 	jsonBytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Sprintf(`{"error": "Failed to marshal JSON: %v"}`, err)
@@ -185,9 +185,9 @@ func formatJSON(data interface{}) string {
 	return string(jsonBytes)
 }
 
-// Helper function to convert parameters to interface{} slice
-func convertParams(params []string) []interface{} {
-	args := make([]interface{}, len(params))
+// Helper function to convert parameters to any slice
+func convertParams(params []string) []any {
+	args := make([]any, len(params))
 	for i, param := range params {
 		args[i] = param
 	}

@@ -65,7 +65,7 @@ func (h *RenameTableHandler) Handle(ctx context.Context, req *mcp.CallToolReques
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"old_table_name": params.OldTableName,
 		"new_table_name": params.NewTableName,
 		"sql":            sql,
@@ -136,7 +136,7 @@ func (h *CopyTableHandler) Handle(ctx context.Context, req *mcp.CallToolRequest)
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"source_table":      params.SourceTable,
 		"destination_table": params.DestinationTable,
 		"copy_data":         params.CopyData,

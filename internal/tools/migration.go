@@ -55,7 +55,7 @@ func (h *MigrateHandler) Handle(ctx context.Context, req *mcp.CallToolRequest) (
 	}
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"migration_sql": params.MigrationSQL,
 		"message":       "Migration executed successfully",
 	}
@@ -90,14 +90,14 @@ func (h *PoolStatusHandler) Handle(ctx context.Context, req *mcp.CallToolRequest
 	config := h.pool.Config()
 
 	// Prepare response
-	response := map[string]interface{}{
-		"pool_config": map[string]interface{}{
+	response := map[string]any{
+		"pool_config": map[string]any{
 			"max_open_connections": config.MaxOpenConns,
 			"max_idle_connections": config.MaxIdleConns,
 			"conn_max_lifetime":    config.ConnMaxLifetime.String(),
 			"conn_max_idle_time":   config.ConnMaxIdleTime.String(),
 		},
-		"pool_stats": map[string]interface{}{
+		"pool_stats": map[string]any{
 			"max_open_connections": stats.MaxOpenConnections,
 			"open_connections":     stats.OpenConnections,
 			"in_use":               stats.InUse,

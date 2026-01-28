@@ -41,7 +41,7 @@ func (h *BeginTransactionHandler) Handle(ctx context.Context, req *mcp.CallToolR
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"transaction_id": txID,
 		"message":        "Transaction started successfully",
 	}
@@ -86,7 +86,7 @@ func (h *CommitTransactionHandler) Handle(ctx context.Context, req *mcp.CallTool
 		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"transaction_id": params.TransactionID,
 		"message":        "Transaction committed successfully",
 	}
@@ -131,7 +131,7 @@ func (h *RollbackTransactionHandler) Handle(ctx context.Context, req *mcp.CallTo
 		return nil, nil, fmt.Errorf("failed to rollback transaction: %w", err)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"transaction_id": params.TransactionID,
 		"message":        "Transaction rolled back successfully",
 	}
