@@ -19,8 +19,8 @@ COPY . .
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -ldflags "-X main.Version=$(git describe --tags 2>/dev/null || echo 'dev') \
-              -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-              -X main.GitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+    -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+    -X main.GitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
     -o mcp-mysql ./cmd
 
 # 运行阶段
