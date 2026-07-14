@@ -1,0 +1,8 @@
+mode: quick
+sources:
+  - name: orders
+    type: mysql
+    dsn: ${ORDERS_DSN}
+  - name: analytics
+    type: clickhouse
+    dsn: ${ANALYTICS_DSN}

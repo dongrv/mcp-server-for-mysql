@@ -7,6 +7,7 @@ toolchain go1.24.12
 require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/modelcontextprotocol/go-sdk v1.2.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

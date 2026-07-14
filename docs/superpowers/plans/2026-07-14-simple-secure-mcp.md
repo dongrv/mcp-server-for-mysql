@@ -33,7 +33,6 @@ The legacy `internal/mysql` package, cross-request transaction handlers, and han
 - Modify: `go.mod`
 - Modify: `internal/config/config.go`
 - Create: `internal/config/config_test.go`
-- Delete: `env.example`
 
 - [ ] **Step 1: Write failing configuration tests**
 
@@ -112,7 +111,7 @@ sources:
     dsn: ${ANALYTICS_CLICKHOUSE_DSN}
 ```
 
-Delete `env.example`, whose single-MySQL variables no longer describe the application.
+Retain `env.example` unchanged as a deprecated compatibility artifact because the current Dockerfile copies it; Task 8 removes it atomically after the Docker and startup migration.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -121,7 +120,7 @@ Run: `go test ./internal/config -count=1`
 Expected: PASS.
 
 ```bash
-git add go.mod go.sum config.example.yaml internal/config/config.go internal/config/config_test.go env.example && git commit -m "feat: load simple multi-source configuration"
+git add go.mod go.sum config.example.yaml internal/config/config.go internal/config/config_test.go && git commit -m "feat: load simple multi-source configuration"
 ```
 
 ## Task 2: Source registry and dialect boundary
@@ -803,6 +802,7 @@ git add internal/tools && git commit -m "feat: expose query-first multi-source M
 - Modify: `Dockerfile`
 - Modify: `start.sh`
 - Modify: `start.bat`
+- Delete: `env.example`
 
 - [ ] **Step 1: Write a failing composition test**
 
@@ -859,7 +859,7 @@ func LogEvent(logger *slog.Logger, event Event)
 
 - [ ] **Step 4: Correct launchers and image behavior**
 
-Remove the Docker HTTP health check because a stdio MCP server exposes no HTTP endpoint. Copy `config.example.yaml` into the image only as documentation; runtime configuration is mounted. Keep the non-root user and remove database credentials from image `ENV`. Update shell and batch launchers to pass `-config` and remove all obsolete single-MySQL environment setup.
+Remove the Docker HTTP health check because a stdio MCP server exposes no HTTP endpoint. Switch the Dockerfile from copying `env.example` to copying `config.example.yaml` into the image only as documentation; runtime configuration is mounted. Keep the non-root user and remove database credentials from image `ENV`. Update shell and batch launchers to pass `-config` and remove all obsolete single-MySQL environment setup. Delete `env.example` in this same task after the Docker and startup migration is complete.
 
 - [ ] **Step 5: Verify and commit**
 
