@@ -7,9 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -39,99 +37,10 @@ type Config struct {
 	Sources []SourceConfig `yaml:"sources"`
 }
 
-// MySQLConfig is retained temporarily for legacy callers. New code must use
-// Config and Load instead.
-//
-// Deprecated: use SourceConfig from Load.
-type MySQLConfig struct {
-	Host            string
-	Port            int
-	User            string
-	Password        string
-	Database        string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-}
-
-// DSN returns a MySQL connection string for legacy callers.
-//
-// Deprecated: use SourceConfig.DSN from Load.
-func (c *MySQLConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=Local&timeout=30s",
-		c.User, c.Password, c.Host, c.Port, c.Database)
-}
-
-// ServerConfig is retained temporarily for the legacy command entrypoint.
-//
-// Deprecated: construct the MCP server from Config loaded with Load.
-type ServerConfig struct {
-	Name    string
-	Version string
-}
-
-// LegacyConfig is retained temporarily so unchanged legacy callers compile.
-// It preserves their environment-based startup behavior until migration.
-//
-// Deprecated: use Config and Load.
-type LegacyConfig struct {
-	MySQL  MySQLConfig
-	Server ServerConfig
-}
-
-// Default returns environment-derived compatibility settings for the legacy command.
-//
-// Deprecated: use Load with an explicit YAML path and environment lookup.
-func Default() *LegacyConfig {
-	return &LegacyConfig{
-		MySQL: MySQLConfig{
-			Host:            getEnvOrDefault("MYSQL_HOST", "localhost"),
-			Port:            getEnvAsInt("MYSQL_PORT", 3306),
-			User:            getEnvOrDefault("MYSQL_USER", "root"),
-			Password:        getEnvOrDefault("MYSQL_PASSWORD", ""),
-			Database:        getEnvOrDefault("MYSQL_DATABASE", "test"),
-			MaxOpenConns:    getEnvAsInt("MYSQL_MAX_OPEN_CONNS", 10),
-			MaxIdleConns:    getEnvAsInt("MYSQL_MAX_IDLE_CONNS", 5),
-			ConnMaxLifetime: time.Duration(getEnvAsInt("MYSQL_CONN_MAX_LIFETIME_MINUTES", 30)) * time.Minute,
-			ConnMaxIdleTime: time.Duration(getEnvAsInt("MYSQL_CONN_MAX_IDLE_TIME_MINUTES", 5)) * time.Minute,
-		},
-		Server: ServerConfig{
-			Name:    "mysql-mcp-server",
-			Version: "1.0.0",
-		},
-	}
-}
-
-// Validate checks the retained compatibility configuration.
-//
-// Deprecated: Load validates new configuration before returning it.
-func (c *LegacyConfig) Validate() error {
-	if c.MySQL.Host == "" {
-		return fmt.Errorf("mysql host is required")
-	}
-	if c.MySQL.User == "" {
-		return fmt.Errorf("mysql user is required")
-	}
-	if c.MySQL.Database == "" {
-		return fmt.Errorf("mysql database is required")
-	}
-	if c.MySQL.MaxOpenConns <= 0 {
-		return fmt.Errorf("mysql max open connections must be positive")
-	}
-	if c.MySQL.MaxIdleConns < 0 {
-		return fmt.Errorf("mysql max idle connections cannot be negative")
-	}
-	if c.MySQL.MaxIdleConns > c.MySQL.MaxOpenConns {
-		return fmt.Errorf("mysql max idle connections cannot exceed max open connections")
-	}
-	return nil
-}
-
 // Load reads and validates source configuration from path. DSNs must be exact
 // environment references in the form ${NAME}; resolved values are never included
 // in returned errors.
-func Load(path string, lookupEnv func(string) string) (Config, error) {
+func Load(path string, lookupEnv func(string) (string, bool)) (Config, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read configuration: %w", err)
@@ -179,7 +88,7 @@ func Load(path string, lookupEnv func(string) string) (Config, error) {
 		if lookupEnv == nil {
 			return Config{}, fmt.Errorf("source %q DSN environment value is required", source.Name)
 		}
-		if resolved := lookupEnv(matches[1]); resolved != "" {
+		if resolved, ok := lookupEnv(matches[1]); ok && strings.TrimSpace(resolved) != "" {
 			source.DSN = resolved
 		} else {
 			return Config{}, fmt.Errorf("source %q DSN environment value is required", source.Name)
@@ -187,20 +96,4 @@ func Load(path string, lookupEnv func(string) string) (Config, error) {
 	}
 
 	return config, nil
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
 }

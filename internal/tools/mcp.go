@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
+	"time"
 
+	"github.com/dongrv/mcp-server-for-mysql/internal/observability"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -81,23 +84,59 @@ func RegisterAll(server *mcp.Server, service *Service) error {
 	return nil
 }
 
+// RegisteredToolNames returns the source-aware, stateless MCP tool surface.
+// A copy is returned so callers cannot alter process behavior.
+func RegisteredToolNames() []string {
+	return []string{
+		"list_sources", "list_tables", "describe_table", "query", "execute_sql",
+		"create_table", "drop_table", "add_columns", "drop_columns", "modify_columns",
+		"create_index", "drop_index", "list_indexes", "rename_table", "copy_table",
+		"copy_table_structure", "migrate", "pool_status",
+	}
+}
+
 type ListSourcesInput struct {
 	RequestID string `json:"request_id,omitempty"`
 }
 
 func registerUntypedTool(server *mcp.Server, name, description string, input any, handle func(context.Context, any) (Response, error)) {
 	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description, InputSchema: JSONSchema(input)}, func(ctx context.Context, request *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, map[string]any, error) {
+		started := time.Now()
 		decoded, requestID, err := decodeToolInput(request.Params.Arguments, input)
 		if err != nil {
 			response := responseForError(requestID, newToolError(CodeInvalidInput, ErrInvalidInput))
+			observability.LogEvent(slog.Default(), observability.Event{RequestID: response.RequestID, Tool: name, State: response.State, Duration: time.Since(started), ErrorCode: string(CodeInvalidInput)})
 			return mcpResponse(response), responseMap(response), nil
 		}
 		response, err := handle(ctx, decoded)
 		if err != nil {
 			response = applyToolError(response, requestID, err)
 		}
+		errorCode := ""
+		if response.Error != nil {
+			errorCode = string(*response.Error)
+		}
+		observability.LogEvent(slog.Default(), observability.Event{RequestID: response.RequestID, Tool: name, SourceID: sourceIDFromValue(reflect.ValueOf(decoded)), State: response.State, Duration: time.Since(started), ErrorCode: errorCode})
 		return mcpResponse(response), responseMap(response), nil
 	})
+}
+
+func sourceIDFromValue(value reflect.Value) string {
+	for value.Kind() == reflect.Pointer {
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return ""
+	}
+	if field := value.FieldByName("SourceID"); field.IsValid() && field.Kind() == reflect.String {
+		return field.String()
+	}
+	for index := 0; index < value.NumField(); index++ {
+		if sourceID := sourceIDFromValue(value.Field(index)); sourceID != "" {
+			return sourceID
+		}
+	}
+	return ""
 }
 
 func applyToolError(response Response, fallbackRequestID string, err error) Response {

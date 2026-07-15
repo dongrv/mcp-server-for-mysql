@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestModeConstants(t *testing.T) {
@@ -14,47 +13,6 @@ func TestModeConstants(t *testing.T) {
 	}
 	if StrictMode != Mode("strict") {
 		t.Errorf("StrictMode = %q, want strict", StrictMode)
-	}
-}
-
-func TestLegacyDefaultReadsMySQLEnvironment(t *testing.T) {
-	for name, value := range map[string]string{
-		"MYSQL_HOST":                       "legacy-db",
-		"MYSQL_PORT":                       "3307",
-		"MYSQL_USER":                       "legacy-user",
-		"MYSQL_PASSWORD":                   "legacy-password",
-		"MYSQL_DATABASE":                   "legacy-orders",
-		"MYSQL_MAX_OPEN_CONNS":             "20",
-		"MYSQL_MAX_IDLE_CONNS":             "7",
-		"MYSQL_CONN_MAX_LIFETIME_MINUTES":  "45",
-		"MYSQL_CONN_MAX_IDLE_TIME_MINUTES": "9",
-	} {
-		t.Setenv(name, value)
-	}
-
-	config := Default()
-	want := MySQLConfig{
-		Host:            "legacy-db",
-		Port:            3307,
-		User:            "legacy-user",
-		Password:        "legacy-password",
-		Database:        "legacy-orders",
-		MaxOpenConns:    20,
-		MaxIdleConns:    7,
-		ConnMaxLifetime: 45 * time.Minute,
-		ConnMaxIdleTime: 9 * time.Minute,
-	}
-	if config.MySQL != want {
-		t.Errorf("Default().MySQL = %#v, want %#v", config.MySQL, want)
-	}
-}
-
-func TestLegacyDefaultValidationUsesEnvironmentConfiguration(t *testing.T) {
-	t.Setenv("MYSQL_MAX_OPEN_CONNS", "1")
-	t.Setenv("MYSQL_MAX_IDLE_CONNS", "2")
-
-	if err := Default().Validate(); err == nil {
-		t.Fatal("Default().Validate() error = nil, want invalid pool configuration error")
 	}
 }
 
@@ -165,6 +123,20 @@ sources:
 	}
 }
 
+func TestLoadRejectsEmptyEnvironmentValue(t *testing.T) {
+	path := writeConfig(t, `
+sources:
+  - name: orders
+    type: mysql
+    dsn: ${ORDERS_DSN}
+`)
+
+	_, err := Load(path, func(string) (string, bool) { return "", true })
+	if err == nil || !strings.Contains(err.Error(), "environment value is required") {
+		t.Fatalf("Load() error = %v, want empty environment value rejection", err)
+	}
+}
+
 func TestLoadRejectsUnknownMode(t *testing.T) {
 	path := writeConfig(t, `
 mode: audit
@@ -255,12 +227,12 @@ sources:
 `)
 
 	secretLookedUp := false
-	_, err := Load(path, func(name string) string {
+	_, err := Load(path, func(name string) (string, bool) {
 		if name == "SECRET_DSN" {
 			secretLookedUp = true
-			return secretDSN
+			return secretDSN, true
 		}
-		return "analytics-dsn"
+		return "analytics-dsn", true
 	})
 	if err == nil {
 		t.Fatal("Load() error = nil, want validation error")
@@ -276,14 +248,14 @@ sources:
 	}
 }
 
-func assertLoadError(t *testing.T, path string, lookupEnv func(string) string) {
+func assertLoadError(t *testing.T, path string, lookupEnv func(string) (string, bool)) {
 	t.Helper()
 	if _, err := Load(path, lookupEnv); err == nil {
 		t.Fatal("Load() error = nil, want error")
 	}
 }
 
-func assertLoadErrorContains(t *testing.T, path string, lookupEnv func(string) string, want string) {
+func assertLoadErrorContains(t *testing.T, path string, lookupEnv func(string) (string, bool), want string) {
 	t.Helper()
 	_, err := Load(path, lookupEnv)
 	if err == nil {
@@ -294,9 +266,10 @@ func assertLoadErrorContains(t *testing.T, path string, lookupEnv func(string) s
 	}
 }
 
-func envLookup(values map[string]string) func(string) string {
-	return func(name string) string {
-		return values[name]
+func envLookup(values map[string]string) func(string) (string, bool) {
+	return func(name string) (string, bool) {
+		value, ok := values[name]
+		return value, ok
 	}
 }
 

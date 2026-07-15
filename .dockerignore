@@ -1,0 +1,11 @@
+.git
+.worktrees
+build
+dist
+coverage.*
+*.out
+*.test
+.env
+config.yaml
+Dockerfile*
+docker-compose*.yml
