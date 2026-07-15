@@ -1,8 +1,23 @@
 mode: quick
 sources:
   - name: orders
+    display_name: 订单库
+    description: 用户充值订单、支付状态与退款记录
+    aliases: [充值库, 支付订单]
+    keywords: [充值, 支付, 退款]
     type: mysql
     dsn: ${ORDERS_DSN}
+  - name: logs
+    display_name: 日志库
+    description: 服务运行日志、错误事件与审计记录
+    aliases: [服务日志, 错误日志]
+    keywords: [报错, 审计, 故障排查]
+    type: mysql
+    dsn: ${LOGS_DSN}
   - name: analytics
+    display_name: 分析库
+    description: 聚合指标、用户行为与经营分析数据
+    aliases: [数仓, 经营分析]
+    keywords: [指标, 趋势, 用户行为]
     type: clickhouse
     dsn: ${ANALYTICS_DSN}
