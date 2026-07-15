@@ -117,12 +117,12 @@ func TestMySQLIdentifierRejectsInjectionAndQuotesSafeNames(t *testing.T) {
 
 func TestClickHouseCapabilitiesAreExplicit(t *testing.T) {
 	caps := ClickHouseDialect{}.Capabilities()
-	if caps.Transactions || caps.AtomicBatches {
+	if caps.Transactions || caps.AtomicBatches || !caps.AlterColumns || caps.CopyTable {
 		t.Fatalf("ClickHouse capabilities = %#v, want transactions and atomic batches disabled", caps)
 	}
 	mysqlCaps := (MySQLDialect{}).Capabilities()
-	if !mysqlCaps.Transactions || !mysqlCaps.AtomicBatches {
-		t.Fatal("MySQL must advertise transactions and atomic batches")
+	if !mysqlCaps.Transactions || !mysqlCaps.AtomicBatches || !mysqlCaps.CopyTable || !mysqlCaps.AlterColumns {
+		t.Fatal("MySQL must advertise its supported transaction, copy, and alter operations")
 	}
 }
 

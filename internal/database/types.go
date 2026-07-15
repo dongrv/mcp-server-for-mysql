@@ -4,7 +4,12 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
+
+// ErrUnsupportedCapability is returned when a source cannot safely express a
+// requested structured operation.
+var ErrUnsupportedCapability = errors.New("unsupported database capability")
 
 // Capability declares the high-level operations supported by a source.
 // Capabilities not explicitly enabled are unsupported.

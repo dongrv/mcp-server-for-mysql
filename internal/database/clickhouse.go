@@ -11,7 +11,7 @@ import (
 type ClickHouseDialect struct{}
 
 func (ClickHouseDialect) Name() string                                { return "clickhouse" }
-func (ClickHouseDialect) Capabilities() Capability                    { return Capability{} }
+func (ClickHouseDialect) Capabilities() Capability                    { return Capability{AlterColumns: true} }
 func (ClickHouseDialect) ValidateIdentifier(name string) error        { return validateIdentifier(name) }
 func (ClickHouseDialect) QuoteIdentifier(name string) (string, error) { return quoteIdentifier(name) }
 

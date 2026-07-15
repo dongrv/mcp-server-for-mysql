@@ -11,7 +11,7 @@ type MySQLDialect struct{}
 
 func (MySQLDialect) Name() string { return "mysql" }
 func (MySQLDialect) Capabilities() Capability {
-	return Capability{Transactions: true, AtomicBatches: true}
+	return Capability{Transactions: true, AtomicBatches: true, CopyTable: true, AlterColumns: true}
 }
 func (MySQLDialect) ValidateIdentifier(name string) error        { return validateIdentifier(name) }
 func (MySQLDialect) QuoteIdentifier(name string) (string, error) { return quoteIdentifier(name) }
