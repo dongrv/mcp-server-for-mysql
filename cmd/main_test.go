@@ -64,8 +64,16 @@ func TestApplicationCloseClosesRegistryExactlyOnce(t *testing.T) {
 
 type closeCountingSource struct{ closed int }
 
-func (*closeCountingSource) ID() string                { return "orders" }
-func (*closeCountingSource) Engine() string            { return "mysql" }
+func (*closeCountingSource) ID() string     { return "orders" }
+func (*closeCountingSource) Engine() string { return "mysql" }
+func (*closeCountingSource) Profile() database.SourceProfile {
+	return database.SourceProfile{
+		DisplayName: "Orders",
+		Description: "Customer payment orders",
+		Aliases:     []string{"payments"},
+		Keywords:    []string{"orders"},
+	}
+}
 func (*closeCountingSource) DB() *sql.DB               { return nil }
 func (*closeCountingSource) Dialect() database.Dialect { return database.MySQLDialect{} }
 func (*closeCountingSource) Capabilities() database.Capability {

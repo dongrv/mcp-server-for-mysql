@@ -15,13 +15,28 @@ import (
 type serviceTestSource struct {
 	id      string
 	engine  string
+	profile database.SourceProfile
 	db      *sql.DB
 	dialect database.Dialect
 	caps    database.Capability
 }
 
-func (s serviceTestSource) ID() string                        { return s.id }
-func (s serviceTestSource) Engine() string                    { return s.engine }
+func (s serviceTestSource) ID() string     { return s.id }
+func (s serviceTestSource) Engine() string { return s.engine }
+func (s serviceTestSource) Profile() database.SourceProfile {
+	profile := s.profile
+	if profile.DisplayName == "" {
+		profile = database.SourceProfile{
+			DisplayName: s.id + " test source",
+			Description: "Test database source for " + s.id,
+			Aliases:     []string{s.id},
+			Keywords:    []string{s.engine},
+		}
+	}
+	profile.Aliases = append([]string(nil), profile.Aliases...)
+	profile.Keywords = append([]string(nil), profile.Keywords...)
+	return profile
+}
 func (s serviceTestSource) DB() *sql.DB                       { return s.db }
 func (s serviceTestSource) Dialect() database.Dialect         { return s.dialect }
 func (s serviceTestSource) Capabilities() database.Capability { return s.caps }
@@ -157,8 +172,14 @@ func TestStrictModePreviewsReadOnlyQueryAndMatchingConfirmationQueries(t *testin
 
 func TestListSourcesExposesOnlyConfiguredIDsAndEngines(t *testing.T) {
 	registry, err := database.NewRegistry([]database.Source{
-		serviceTestSource{id: "orders", engine: "mysql", dialect: database.MySQLDialect{}},
-		serviceTestSource{id: "events", engine: "clickhouse", dialect: database.ClickHouseDialect{}},
+		serviceTestSource{
+			id: "orders", engine: "mysql", dialect: database.MySQLDialect{},
+			profile: database.SourceProfile{DisplayName: "Orders", Description: "Customer payment orders", Aliases: []string{"payments"}, Keywords: []string{"orders", "refunds"}},
+		},
+		serviceTestSource{
+			id: "events", engine: "clickhouse", dialect: database.ClickHouseDialect{},
+			profile: database.SourceProfile{DisplayName: "Events", Description: "Product event analytics", Aliases: []string{"analytics"}, Keywords: []string{"events", "metrics"}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("new registry: %v", err)

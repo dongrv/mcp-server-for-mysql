@@ -66,8 +66,16 @@ type testSource struct {
 	caps database.Capability
 }
 
-func (s testSource) ID() string                        { return "analytics" }
-func (s testSource) Engine() string                    { return "mysql" }
+func (s testSource) ID() string     { return "analytics" }
+func (s testSource) Engine() string { return "mysql" }
+func (s testSource) Profile() database.SourceProfile {
+	return database.SourceProfile{
+		DisplayName: "Analytics",
+		Description: "Test analytics source",
+		Aliases:     []string{"warehouse"},
+		Keywords:    []string{"analytics"},
+	}
+}
 func (s testSource) DB() *sql.DB                       { return s.db }
 func (s testSource) Dialect() database.Dialect         { return database.MySQLDialect{} }
 func (s testSource) Capabilities() database.Capability { return s.caps }

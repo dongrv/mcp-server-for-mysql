@@ -3,7 +3,10 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dongrv/mcp-server-for-mysql/internal/config"
@@ -12,6 +15,7 @@ import (
 type fakeSource struct {
 	id         string
 	engine     string
+	profile    SourceProfile
 	closeErr   error
 	closeCalls int
 }
@@ -20,11 +24,14 @@ func newFakeSource(id string) *fakeSource {
 	return &fakeSource{id: id, engine: "mysql"}
 }
 
-func (s *fakeSource) ID() string               { return s.id }
-func (s *fakeSource) Engine() string           { return s.engine }
-func (s *fakeSource) DB() *sql.DB              { return nil }
-func (s *fakeSource) Dialect() Dialect         { return MySQLDialect{} }
-func (s *fakeSource) Capabilities() Capability { return MySQLDialect{}.Capabilities() }
+func (s *fakeSource) ID() string             { return s.id }
+func (s *fakeSource) Engine() string         { return s.engine }
+func (s *fakeSource) Profile() SourceProfile { return cloneSourceProfile(s.profile) }
+func (s *fakeSource) DB() *sql.DB            { return nil }
+func (s *fakeSource) Dialect() Dialect       { return MySQLDialect{} }
+func (s *fakeSource) Capabilities() Capability {
+	return MySQLDialect{}.Capabilities()
+}
 func (s *fakeSource) Close() error {
 	s.closeCalls++
 	return s.closeErr
@@ -37,6 +44,126 @@ func mustNewRegistry(t *testing.T, sources []Source) *Registry {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
 	return registry
+}
+
+func TestRegistrySourcesPreserveProfiles(t *testing.T) {
+	analyticsProfile := SourceProfile{
+		DisplayName: "Analytics",
+		Description: "Aggregated event analytics",
+		Aliases:     []string{"warehouse"},
+		Keywords:    []string{"events", "metrics"},
+	}
+	ordersProfile := SourceProfile{
+		DisplayName: "Orders",
+		Description: "Customer payment orders",
+		Aliases:     []string{"payments"},
+		Keywords:    []string{"orders", "refunds"},
+	}
+	analytics := newFakeSource("analytics")
+	analytics.profile = analyticsProfile
+	orders := newFakeSource("orders")
+	orders.profile = ordersProfile
+	registry := mustNewRegistry(t, []Source{orders, analytics})
+
+	sources := registry.Sources()
+	if len(sources) != 2 {
+		t.Fatalf("Sources() length = %d, want 2", len(sources))
+	}
+	if sources[0].ID() != "analytics" || sources[1].ID() != "orders" {
+		t.Fatalf("Sources() IDs = %v, want [analytics orders]", []string{sources[0].ID(), sources[1].ID()})
+	}
+	if got := sources[0].Profile(); !reflect.DeepEqual(got, analyticsProfile) {
+		t.Errorf("analytics profile = %#v, want %#v", got, analyticsProfile)
+	}
+	if got := sources[1].Profile(); !reflect.DeepEqual(got, ordersProfile) {
+		t.Errorf("orders profile = %#v, want %#v", got, ordersProfile)
+	}
+}
+
+func TestSourceProfileIsDefensivelyCopied(t *testing.T) {
+	source := &sqlSource{profile: SourceProfile{
+		DisplayName: "Orders",
+		Description: "Customer payment orders",
+		Aliases:     []string{"payments"},
+		Keywords:    []string{"orders"},
+	}}
+
+	profile := source.Profile()
+	profile.Aliases[0] = "mutated alias"
+	profile.Keywords[0] = "mutated keyword"
+
+	got := source.Profile()
+	if got.Aliases[0] != "payments" {
+		t.Errorf("Profile().Aliases = %v, want stored aliases unchanged", got.Aliases)
+	}
+	if got.Keywords[0] != "orders" {
+		t.Errorf("Profile().Keywords = %v, want stored keywords unchanged", got.Keywords)
+	}
+}
+
+func TestSourceProfileFromConfigMapsBusinessMetadataOnly(t *testing.T) {
+	cfg := config.SourceConfig{
+		Name:        "orders",
+		DisplayName: "Orders",
+		Description: "Customer payment orders",
+		Aliases:     []string{"payments"},
+		Keywords:    []string{"orders", "refunds"},
+		Type:        "mysql",
+		DSN:         "user:super-secret-password@tcp(database.example:3306)/orders",
+	}
+	source := &sqlSource{profile: profileFromConfig(cfg)}
+	cfg.Aliases[0] = "mutated alias"
+	cfg.Keywords[0] = "mutated keyword"
+
+	got := source.Profile()
+	want := SourceProfile{
+		DisplayName: "Orders",
+		Description: "Customer payment orders",
+		Aliases:     []string{"payments"},
+		Keywords:    []string{"orders", "refunds"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Profile() = %#v, want %#v", got, want)
+	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal(Profile()) error = %v", err)
+	}
+	if strings.Contains(string(encoded), cfg.DSN) || strings.Contains(string(encoded), "super-secret-password") {
+		t.Fatalf("profile leaked connection details: %s", encoded)
+	}
+}
+
+func TestOpenRegistryPreservesSourceConfigProfiles(t *testing.T) {
+	cfg := config.Config{Sources: []config.SourceConfig{
+		{
+			Name: "orders", DisplayName: "Orders", Description: "Customer payment orders",
+			Aliases: []string{"payments"}, Keywords: []string{"orders", "refunds"}, Type: "mysql", DSN: "orders-secret",
+		},
+		{
+			Name: "analytics", DisplayName: "Analytics", Description: "Aggregated event analytics",
+			Aliases: []string{"warehouse"}, Keywords: []string{"events", "metrics"}, Type: "clickhouse", DSN: "analytics-secret",
+		},
+	}}
+	factory := func(_ context.Context, sourceConfig config.SourceConfig) (Source, error) {
+		source := newFakeSource(sourceConfig.Name)
+		source.engine = sourceConfig.Type
+		source.profile = profileFromConfig(sourceConfig)
+		return source, nil
+	}
+
+	registry, err := openRegistry(context.Background(), cfg, factory)
+	if err != nil {
+		t.Fatalf("openRegistry() error = %v", err)
+	}
+	t.Cleanup(func() { _ = registry.Close() })
+	sources := registry.Sources()
+	if got := sources[0].Profile(); !reflect.DeepEqual(got, profileFromConfig(cfg.Sources[1])) {
+		t.Errorf("analytics profile = %#v, want %#v", got, profileFromConfig(cfg.Sources[1]))
+	}
+	if got := sources[1].Profile(); !reflect.DeepEqual(got, profileFromConfig(cfg.Sources[0])) {
+		t.Errorf("orders profile = %#v, want %#v", got, profileFromConfig(cfg.Sources[0]))
+	}
 }
 
 func TestRegistryRejectsUnknownSourceAndClosesEveryPoolOnce(t *testing.T) {

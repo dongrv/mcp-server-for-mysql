@@ -20,6 +20,14 @@ type Capability struct {
 	AlterColumns  bool
 }
 
+// SourceProfile contains business metadata that helps identify a source.
+type SourceProfile struct {
+	DisplayName string   `json:"display_name"`
+	Description string   `json:"description"`
+	Aliases     []string `json:"aliases"`
+	Keywords    []string `json:"keywords"`
+}
+
 // Table is normalized metadata for a database table.
 type Table struct {
 	Name    string
@@ -57,6 +65,7 @@ type TableDescription struct {
 type Source interface {
 	ID() string
 	Engine() string
+	Profile() SourceProfile
 	DB() *sql.DB
 	Dialect() Dialect
 	Capabilities() Capability

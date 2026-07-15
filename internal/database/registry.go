@@ -123,6 +123,7 @@ func closeSources(sources []Source) {
 type sqlSource struct {
 	id       string
 	engine   string
+	profile  SourceProfile
 	db       *sql.DB
 	dialect  Dialect
 	close    sync.Once
@@ -131,6 +132,7 @@ type sqlSource struct {
 
 func (s *sqlSource) ID() string               { return s.id }
 func (s *sqlSource) Engine() string           { return s.engine }
+func (s *sqlSource) Profile() SourceProfile   { return cloneSourceProfile(s.profile) }
 func (s *sqlSource) DB() *sql.DB              { return s.db }
 func (s *sqlSource) Dialect() Dialect         { return s.dialect }
 func (s *sqlSource) Capabilities() Capability { return s.dialect.Capabilities() }
@@ -165,7 +167,26 @@ func openSource(ctx context.Context, cfg config.SourceConfig) (Source, error) {
 		_ = db.Close()
 		return nil, errors.New("database connection check failed")
 	}
-	return &sqlSource{id: cfg.Name, engine: cfg.Type, db: db, dialect: dialect}, nil
+	return &sqlSource{id: cfg.Name, engine: cfg.Type, profile: profileFromConfig(cfg), db: db, dialect: dialect}, nil
+}
+
+func profileFromConfig(cfg config.SourceConfig) SourceProfile {
+	return cloneSourceProfile(SourceProfile{
+		DisplayName: cfg.DisplayName,
+		Description: cfg.Description,
+		Aliases:     cfg.Aliases,
+		Keywords:    cfg.Keywords,
+	})
+}
+
+func cloneSourceProfile(profile SourceProfile) SourceProfile {
+	if profile.Aliases != nil {
+		profile.Aliases = append([]string{}, profile.Aliases...)
+	}
+	if profile.Keywords != nil {
+		profile.Keywords = append([]string{}, profile.Keywords...)
+	}
+	return profile
 }
 
 func openClickHouseDB(dsn string) (*sql.DB, error) {
