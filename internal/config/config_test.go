@@ -35,6 +35,8 @@ func TestLocalClientGuideContract(t *testing.T) {
 		"多候选",
 		"preview_hash",
 		"source_id",
+		"execute_sql",
+		"Codex Docker（PowerShell）",
 	} {
 		if !strings.Contains(guide, anchor) {
 			t.Errorf("local client guide must contain %q", anchor)
@@ -45,6 +47,49 @@ func TestLocalClientGuideContract(t *testing.T) {
 			t.Errorf("local client guide must not contain legacy setup guidance %q", legacy)
 		}
 	}
+	if containsChatGPTWebSetup(guide) {
+		t.Error("local client guide must not contain ChatGPT web setup instructions")
+	}
+
+	t.Run("detects ChatGPT web setup without rejecting an exclusion", func(t *testing.T) {
+		tests := []struct {
+			name string
+			text string
+			want bool
+		}{
+			{name: "English setup heading", text: "## ChatGPT web setup", want: true},
+			{name: "remote web section", text: "## ChatGPT web\nOpen Settings and add a server.", want: true},
+			{name: "Chinese setup heading", text: "## ChatGPT 网页版配置", want: true},
+			{name: "Chinese setup instruction", text: "在 ChatGPT 网页版的 Settings 中添加 MCP Server。", want: true},
+			{name: "explicit exclusion", text: "本文不包含 ChatGPT web 接入步骤。", want: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := containsChatGPTWebSetup(tt.text); got != tt.want {
+					t.Errorf("containsChatGPTWebSetup(%q) = %t, want %t", tt.text, got, tt.want)
+				}
+			})
+		}
+	})
+}
+
+func containsChatGPTWebSetup(content string) bool {
+	for _, line := range strings.Split(strings.ToLower(content), "\n") {
+		if !strings.Contains(line, "chatgpt") {
+			continue
+		}
+		mentionsWeb := strings.Contains(line, "web") || strings.Contains(line, "网页版") || strings.Contains(line, "网页端")
+		mentionsSetup := strings.Contains(line, "setup") || strings.Contains(line, "配置") || strings.Contains(line, "接入") || strings.Contains(line, "添加") || strings.Contains(line, "settings")
+		isSectionHeading := strings.HasPrefix(strings.TrimSpace(line), "#")
+		if !mentionsWeb || (!mentionsSetup && !isSectionHeading) {
+			continue
+		}
+		excludesSetup := strings.Contains(line, "不包含") || strings.Contains(line, "不提供") || strings.Contains(line, "不扩展") || strings.Contains(line, "exclude") || strings.Contains(line, "does not")
+		if !excludesSetup {
+			return true
+		}
+	}
+	return false
 }
 
 func TestExampleConfigurationContainsNoCredentialValue(t *testing.T) {

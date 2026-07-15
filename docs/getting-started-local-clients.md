@@ -195,12 +195,28 @@ ANALYTICS_DSN=REPLACE_LOCALLY_WITH_ANALYTICS_DSN
 
 先在终端验证容器命令。`-i` 必须保留，因为 MCP 使用 stdin/stdout；配置文件以只读方式挂载：
 
+macOS、Linux 或其他 Unix shell：
+
 ```sh
 docker run --rm -i \
   --env-file /ABSOLUTE/PATH/TO/mcp-database.env \
   --mount type=bind,src=/ABSOLUTE/PATH/TO/config.yaml,dst=/app/config.yaml,readonly \
   secure-database-mcp:local -config /app/config.yaml
 ```
+
+Windows PowerShell 终端验证：
+
+```powershell
+$envFile = (Resolve-Path 'C:\ABSOLUTE\PATH\TO\mcp-database.env').Path
+$configFile = (Resolve-Path 'C:\ABSOLUTE\PATH\TO\config.yaml').Path
+
+docker run --rm -i `
+  --env-file "$envFile" `
+  --mount "type=bind,source=$configFile,target=/app/config.yaml,readonly" `
+  secure-database-mcp:local -config /app/config.yaml
+```
+
+先把两个 `C:\ABSOLUTE\PATH\TO\...` 替换为已存在文件的完整盘符路径，例如 `C:\Users\your-name\mcp\config.yaml`。`Resolve-Path` 会在命令启动前得到 Docker Desktop 可用的绝对宿主机路径；`source` 是 Windows 文件，`target` 是容器内的 Linux 路径。路径含空格时保留示例中的引号，路径中不要使用逗号。
 
 ### Claude Desktop 的 Docker 配置
 
@@ -230,7 +246,7 @@ docker run --rm -i \
 
 Windows 用户要把两个宿主机路径换成 Docker Desktop 可访问的绝对路径，并在 JSON 中把每个 `\` 写成 `\\`；如果 GUI 找不到 `docker`，把 `command` 改为 `docker.exe` 的绝对路径。保存后完全重启 Claude Desktop。
 
-### Codex 的 Docker 配置
+### Codex Docker（macOS/Linux）
 
 ```sh
 codex mcp add secure-database-docker -- \
@@ -240,7 +256,22 @@ codex mcp add secure-database-docker -- \
   secure-database-mcp:local -config /app/config.yaml
 ```
 
-Windows PowerShell 把反斜杠续行符换成反引号，并使用宿主机绝对路径。运行 `codex mcp list` 确认 `secure-database-docker` 已启用。本地二进制与 Docker 配置二选一即可，避免同时启用两个同名用途的 server。
+### Codex Docker（PowerShell）
+
+下面是可直接用于注册的 PowerShell 版本。先替换两个占位路径；变量在注册时展开为绝对路径，Codex 之后会用这些固定参数启动 `docker run`：
+
+```powershell
+$envFile = (Resolve-Path 'C:\ABSOLUTE\PATH\TO\mcp-database.env').Path
+$configFile = (Resolve-Path 'C:\ABSOLUTE\PATH\TO\config.yaml').Path
+
+codex mcp add secure-database-docker -- `
+  docker run --rm -i `
+  --env-file "$envFile" `
+  --mount "type=bind,source=$configFile,target=/app/config.yaml,readonly" `
+  secure-database-mcp:local -config /app/config.yaml
+```
+
+运行 `codex mcp list` 确认 `secure-database-docker` 已启用。本地二进制与 Docker 配置二选一即可，避免同时启用两个同名用途的 server。
 
 ## 7. 验证发现与选库
 
@@ -274,7 +305,7 @@ AI 应先用 `list_sources` 确认“订单库”唯一对应 `orders`，必要�
 
 ## 8. 查询、严格模式与高风险确认
 
-在默认 `quick` 模式下，单条只读 `query` 可以直接执行；高风险变更和多语句变更会先返回预览。若希望所有非空 SQL（包括只读查询）都经过确认，把 `config.yaml` 第一行改为：
+`query` 只接受一条只读 SQL，不能执行 `DELETE` 或其他写操作。在默认 `quick` 模式下，单条只读 `query` 可以直接执行；写操作必须调用 `execute_sql`，高风险变更和多语句变更会先返回预览。若希望所有非空 SQL（包括只读查询）都经过确认，把 `config.yaml` 第一行改为：
 
 ```yaml
 mode: strict
@@ -291,7 +322,7 @@ mode: strict
 }
 ```
 
-高风险示例是执行不带 `WHERE` 的删除：
+高风险示例是通过 `execute_sql` 执行不带 `WHERE` 的删除。第一次调用 `execute_sql` 获取预览，输入为：
 
 ```json
 {
@@ -302,7 +333,7 @@ mode: strict
 
 此时无论 quick 还是 strict 模式，都必须先展示完整高风险预览并等待用户确认。用户没有明确确认时不得补发 `confirm: true`。
 
-用户确认的内容与预览完全一致时，才使用刚返回的哈希重发：
+用户确认的内容与预览完全一致时，才使用刚返回的哈希再次调用同一个 `execute_sql` 工具，输入为：
 
 ```json
 {
