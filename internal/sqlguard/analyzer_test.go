@@ -347,3 +347,30 @@ func TestPlanRiskForNonAtomicBatches(t *testing.T) {
 		t.Errorf("atomic risk = %q, want %q", got, want)
 	}
 }
+
+func TestExplainSelectIsReadOnlyAndExplainAnalyzeIsRejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		analyzer Analyzer
+		sql      string
+		wantErr  bool
+	}{
+		{"mysql explain select", newMySQLAnalyzer(t, ""), "EXPLAIN SELECT id FROM orders", false},
+		{"mysql explain analyze", newMySQLAnalyzer(t, ""), "EXPLAIN ANALYZE SELECT id FROM orders", true},
+		{"clickhouse explain select", NewClickHouseAnalyzer(), "EXPLAIN SYNTAX SELECT id FROM events", false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			plan, err := test.analyzer.Analyze(test.sql)
+			if test.wantErr {
+				if !errors.Is(err, ErrUnsafeOrUnsupportedSQL) {
+					t.Fatalf("Analyze error = %v, want unsafe SQL", err)
+				}
+				return
+			}
+			if err != nil || !plan.ReadOnly {
+				t.Fatalf("Analyze = %#v, %v; want read-only plan", plan, err)
+			}
+		})
+	}
+}

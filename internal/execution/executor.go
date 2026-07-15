@@ -89,11 +89,18 @@ func (e Executor) ExecutePlan(ctx context.Context, source database.Source, plan 
 	ctx, cancel := context.WithTimeout(ctx, e.effectiveTimeout())
 	defer cancel()
 
-	atomic := source.Capabilities().AtomicBatches && allWrites(plan.Statements)
+	atomic := IsAtomicBatch(source, plan)
 	if atomic {
 		return executeAtomically(ctx, source.DB(), plan.Statements, args)
 	}
 	return executeSequentially(ctx, source.DB(), plan.Statements, args)
+}
+
+// IsAtomicBatch reports whether ExecutePlan will run the complete plan in a
+// single transaction. It is shared with preview construction so callers never
+// confirm an atomicity guarantee that execution cannot provide.
+func IsAtomicBatch(source database.Source, plan sqlguard.Plan) bool {
+	return source != nil && source.Capabilities().AtomicBatches && allWrites(plan.Statements)
 }
 
 func (e Executor) effectiveTimeout() time.Duration {

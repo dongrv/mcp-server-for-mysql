@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -55,6 +56,24 @@ func (r *Registry) Source(id string) (Source, error) {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownSource, id)
 	}
 	return source, nil
+}
+
+// Sources returns every configured source ordered by ID. The returned slice is
+// a snapshot and callers cannot mutate registry ownership through it.
+func (r *Registry) Sources() []Source {
+	if r == nil {
+		return nil
+	}
+	ids := make([]string, 0, len(r.sources))
+	for id := range r.sources {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	sources := make([]Source, 0, len(ids))
+	for _, id := range ids {
+		sources = append(sources, r.sources[id])
+	}
+	return sources
 }
 
 // Close closes every source exactly once and joins close failures.

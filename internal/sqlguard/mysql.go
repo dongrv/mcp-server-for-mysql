@@ -59,6 +59,11 @@ func classifyMySQLStatement(raw string, stmt sqlparser.Statement) (Statement, er
 			return Statement{}, unsafeSQLError(nil)
 		}
 		statement.Kind = ReadOnly
+	case *sqlparser.ExplainStmt:
+		if node.Type == sqlparser.AnalyzeType || !isSafeMySQLExplain(node.Statement) {
+			return Statement{}, unsafeSQLError(nil)
+		}
+		statement.Kind = ReadOnly
 	case *sqlparser.Insert:
 		statement.Kind = Write
 	case *sqlparser.Update:
@@ -99,6 +104,17 @@ func classifyMySQLStatement(raw string, stmt sqlparser.Statement) (Statement, er
 		return Statement{}, unsafeSQLError(nil)
 	}
 	return statement, nil
+}
+
+func isSafeMySQLExplain(stmt sqlparser.Statement) bool {
+	switch node := stmt.(type) {
+	case *sqlparser.Select:
+		return !hasUnsafeMySQLSelect(node)
+	case *sqlparser.Union:
+		return !hasUnsafeMySQLSelect(node)
+	default:
+		return false
+	}
 }
 
 func hasUnsafeMySQLSelect(stmt sqlparser.SelectStatement) bool {

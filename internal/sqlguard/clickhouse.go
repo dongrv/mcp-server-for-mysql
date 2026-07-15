@@ -42,6 +42,12 @@ func classifyClickHouseStatement(raw string, stmt clickhouse.Expr) (Statement, e
 			return Statement{}, unsafeSQLError(nil)
 		}
 		statement.Kind = ReadOnly
+	case *clickhouse.ExplainStmt:
+		query, ok := node.Statement.(*clickhouse.SelectQuery)
+		if !ok || !validClickHouseSelect(query) {
+			return Statement{}, unsafeSQLError(nil)
+		}
+		statement.Kind = ReadOnly
 	case *clickhouse.InsertStmt:
 		statement.Kind = Write
 	case *clickhouse.DeleteClause:
