@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,13 +203,27 @@ func TestIntegrationComposeUsesLoopbackParameterizedPorts(t *testing.T) {
 
 func TestIntegrationComposeUsesAuthenticatedDatabaseHealthChecks(t *testing.T) {
 	services := loadIntegrationComposeServices(t)
-	want := []string{
+	wantMySQL := []string{
 		"CMD-SHELL",
 		`MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --protocol=TCP --host=127.0.0.1 --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}" --execute='SELECT 1' --silent`,
 	}
 	for _, service := range []string{"mysql-orders", "mysql-logs"} {
-		if got := services[service].Healthcheck.Test; !slices.Equal(got, want) {
-			t.Errorf("%s health check = %v, want %v", service, got, want)
+		if got := services[service].Healthcheck.Test; !slices.Equal(got, wantMySQL) {
+			t.Errorf("%s health check = %v, want %v", service, got, wantMySQL)
+		}
+	}
+
+	wantClickHouse := []string{
+		"CMD-SHELL",
+		`clickhouse-client --host 127.0.0.1 --user "$${CLICKHOUSE_USER}" --password "$${CLICKHOUSE_PASSWORD}" --database "$${CLICKHOUSE_DB}" --query 'SELECT 1'`,
+	}
+	clickHouseHealth := services["clickhouse"].Healthcheck.Test
+	if !slices.Equal(clickHouseHealth, wantClickHouse) {
+		t.Errorf("clickhouse health check = %v, want %v", clickHouseHealth, wantClickHouse)
+	}
+	for _, forbidden := range []string{"wget", "/ping"} {
+		if strings.Contains(strings.Join(clickHouseHealth, " "), forbidden) {
+			t.Errorf("clickhouse health check contains unauthenticated probe %q: %v", forbidden, clickHouseHealth)
 		}
 	}
 }
