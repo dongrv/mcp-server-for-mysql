@@ -34,7 +34,7 @@ func openIntegrationService(t *testing.T, mode config.Mode) (*tools.Service, *da
 	t.Setenv("INTEGRATION_MYSQL_DSN", integrationMySQLDSN())
 	t.Setenv("INTEGRATION_CLICKHOUSE_DSN", integrationClickHouseDSN())
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	contents := fmt.Sprintf("mode: %s\nsources:\n  - name: orders\n    type: mysql\n    dsn: ${INTEGRATION_MYSQL_DSN}\n  - name: analytics\n    type: clickhouse\n    dsn: ${INTEGRATION_CLICKHOUSE_DSN}\n", mode)
+	contents := fmt.Sprintf("mode: %s\nsources:\n  - name: orders\n    display_name: Orders\n    description: Integration payment orders\n    type: mysql\n    dsn: ${INTEGRATION_MYSQL_DSN}\n  - name: analytics\n    display_name: Analytics\n    description: Integration event analytics\n    type: clickhouse\n    dsn: ${INTEGRATION_CLICKHOUSE_DSN}\n", mode)
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatalf("write integration configuration: %v", err)
 	}

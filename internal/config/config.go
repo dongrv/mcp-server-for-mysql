@@ -81,6 +81,7 @@ func Load(path string, lookupEnv func(string) (string, bool)) (Config, error) {
 		return Config{}, fmt.Errorf("at least one source is required")
 	}
 	names := make(map[string]struct{}, len(config.Sources))
+	environmentNames := make([]string, len(config.Sources))
 	for i := range config.Sources {
 		source := &config.Sources[i]
 		if strings.TrimSpace(source.Name) == "" {
@@ -104,10 +105,15 @@ func Load(path string, lookupEnv func(string) (string, bool)) (Config, error) {
 		if matches == nil {
 			return Config{}, fmt.Errorf("source %q has an invalid DSN environment reference", source.Name)
 		}
-		if lookupEnv == nil {
-			return Config{}, fmt.Errorf("source %q DSN environment value is required", source.Name)
-		}
-		if resolved, ok := lookupEnv(matches[1]); ok && strings.TrimSpace(resolved) != "" {
+		environmentNames[i] = matches[1]
+	}
+
+	if lookupEnv == nil {
+		return Config{}, fmt.Errorf("source %q DSN environment value is required", config.Sources[0].Name)
+	}
+	for i := range config.Sources {
+		source := &config.Sources[i]
+		if resolved, ok := lookupEnv(environmentNames[i]); ok && strings.TrimSpace(resolved) != "" {
 			source.DSN = resolved
 		} else {
 			return Config{}, fmt.Errorf("source %q DSN environment value is required", source.Name)

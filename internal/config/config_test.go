@@ -409,7 +409,7 @@ sources:
 	assertLoadErrorContains(t, path, envLookup(nil), "DSN is required")
 }
 
-func TestLoadRedactsExpandedDSNFromLaterInvalidSource(t *testing.T) {
+func TestLoadValidatesAllSourcesBeforeResolvingDSNs(t *testing.T) {
 	const secretDSN = "mysql://user:super-secret-password@host/orders"
 	path := writeConfig(t, `
 sources:
@@ -419,30 +419,27 @@ sources:
     type: mysql
     dsn: ${SECRET_DSN}
   - name: analytics
-    display_name: Analytics
+    display_name: " "
     description: Aggregated business analytics
-    type: unknown
+    type: clickhouse
     dsn: ${ANALYTICS_DSN}
 `)
 
-	secretLookedUp := false
-	_, err := Load(path, func(name string) (string, bool) {
-		if name == "SECRET_DSN" {
-			secretLookedUp = true
-			return secretDSN, true
-		}
-		return "analytics-dsn", true
+	lookupCalls := 0
+	_, err := Load(path, func(string) (string, bool) {
+		lookupCalls++
+		return secretDSN, true
 	})
 	if err == nil {
-		t.Fatal("Load() error = nil, want validation error")
+		t.Fatal("Load() error = nil, want profile validation error")
 	}
-	if !secretLookedUp {
-		t.Fatal("Load() did not expand the first source DSN before failing")
+	if lookupCalls != 0 {
+		t.Fatalf("lookupEnv calls = %d, want 0 before all sources are validated", lookupCalls)
 	}
-	if !strings.Contains(err.Error(), "unsupported type") {
-		t.Errorf("Load() error = %q, want later source type validation error", err)
+	if !strings.Contains(err.Error(), `source "analytics" display_name`) {
+		t.Errorf("Load() error = %q, want later source profile validation error", err)
 	}
-	if strings.Contains(err.Error(), secretDSN) {
+	if strings.Contains(err.Error(), secretDSN) || strings.Contains(err.Error(), "super-secret-password") {
 		t.Errorf("Load() error leaked DSN: %v", err)
 	}
 }
