@@ -1,6 +1,8 @@
 # Claude Desktop 与 Codex 本地接入指南
 
-本指南面向第一次把数据库 MCP Server 接入本地 AI 客户端的开发者，主流程只覆盖 Claude Desktop 与 Codex，以及两种启动方式：本地二进制和 Docker。本文不把任何真实账号、密码或 DSN 写进仓库。本指南不提供 ChatGPT web 接入配置。
+本指南面向第一次把数据库 MCP Server 接入本地 AI 客户端的开发者，主流程只覆盖 Claude Desktop 与 Codex，以及两种启动方式：本地二进制和 Docker。本文不把任何真实账号、密码或 DSN 写进仓库。
+
+本指南不提供 ChatGPT web 接入配置。
 
 ## 1. 准备环境
 
@@ -311,7 +313,8 @@ codex mcp add secure-database-docker -- `
 
 - 唯一匹配时，AI 必须使用该候选的精确 `source_id`。
 - 多候选时，AI 必须列出候选的 `display_name` 和 `description`，并等待用户选择。
-- AI 不得猜测，也不得同时查询所有候选。
+- AI 不得猜测候选数据源。
+- AI 不得同时查询所有候选。
 
 下面的唯一候选和多候选示例使用第 2 节的三数据源扩展。如果你保持单源 starter，先完成 `orders` 的 `list_sources`、`list_tables` 和查询验证即可。
 
@@ -336,7 +339,7 @@ AI 应先用 `list_sources` 确认“订单库”唯一对应 `orders`，必要�
 
 ### 多候选时必须询问
 
-“查一下最近的用户数据”可能同时匹配订单库的用户订单和分析库的用户行为。元数据可能重叠或过期，AI 不得猜测，也不得同时查询两个库。它应先展示候选并等待用户选择，例如：
+“查一下最近的用户数据”可能同时匹配订单库的用户订单和分析库的用户行为。元数据可能重叠或过期，此时应直接执行上面的多候选规则，先展示候选并等待用户选择，例如：
 
 - `订单库`：用户充值订单、支付状态与退款记录
 - `分析库`：聚合指标、用户行为与经营分析数据
@@ -362,12 +365,14 @@ mode: strict
 }
 ```
 
-高风险示例是通过 `execute_sql` 执行不带 `WHERE` 的删除。第一次调用 `execute_sql` 获取预览，输入为：
+破坏性演练必须调用 `execute_sql`，并在预览与确认中都使用 `source_id: "orders"`。
+
+下面通过 `execute_sql` 对 starter 的 orders 表演示不带 `WHERE` 的删除。第一次调用获取预览，输入为：
 
 ```json
 {
-  "source_id": "logs",
-  "sql": "DELETE FROM audit_events"
+  "source_id": "orders",
+  "sql": "DELETE FROM orders"
 }
 ```
 
@@ -377,8 +382,8 @@ mode: strict
 
 ```json
 {
-  "source_id": "logs",
-  "sql": "DELETE FROM audit_events",
+  "source_id": "orders",
+  "sql": "DELETE FROM orders",
   "confirm": true,
   "preview_hash": "COPY_THE_RETURNED_HIGH_RISK_HASH_EXACTLY"
 }
@@ -394,7 +399,7 @@ mode: strict
 - **`.env` 不生效**：`.env` 只由 `docker run --env-file` 读取，不会被本地二进制自动读取。确认每行都是 `KEY=VALUE`、没有多余引号或空格，并使用绝对路径。
 - **Docker 挂载失败**：确认宿主机文件存在、Docker Desktop 已共享对应磁盘，并保持目标为 `/app/config.yaml`、挂载为 `readonly`。Windows JSON 路径需要双反斜杠。
 - **`unknown_source`**：重新调用 `list_sources`，把返回项的精确 `id` 作为 `source_id`；不要传显示名称或别名。
-- **自然语言有歧义**：让 AI 列出所有合理候选的 `display_name` 和 `description`，等待你选择；不要允许它猜测或查询多个候选。
+- **自然语言有歧义**：必须按第 7 节的多候选规则列出 `display_name` 和 `description`，并等待你选择后再调用工具。
 - **数据库连接失败**：先在同一终端或容器网络中使用数据库原生客户端验证 DSN、DNS、端口、TLS 和账号权限；容器里的 `localhost` 指向容器自身。服务器只返回脱敏的 `connection_failure`，不会回显 DSN。
 
 ## 10. 官方参考与其他客户端

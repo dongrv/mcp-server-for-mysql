@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,13 +11,15 @@ import (
 )
 
 const (
-	localGuideStarterHeading      = "## 2. 最小可运行配置：一个 orders MySQL 数据源"
-	localGuideUniqueSourceRule    = "唯一匹配时，AI 必须使用该候选的精确 `source_id`。"
-	localGuideAmbiguousSourceRule = "多候选时，AI 必须列出候选的 `display_name` 和 `description`，并等待用户选择。"
-	localGuideNoGuessRule         = "AI 不得猜测，也不得同时查询所有候选。"
-	localGuideReadOnlyQueryRule   = "`query` 只接受只读 SQL。"
-	localGuideDestructiveRule     = "破坏性操作必须使用 `execute_sql`。"
-	localGuideNoWebSetupRule      = "本指南不提供 ChatGPT web 接入配置。"
+	localGuideStarterHeading             = "## 2. 最小可运行配置：一个 orders MySQL 数据源"
+	localGuideUniqueSourceRule           = "唯一匹配时，AI 必须使用该候选的精确 `source_id`。"
+	localGuideAmbiguousSourceRule        = "多候选时，AI 必须列出候选的 `display_name` 和 `description`，并等待用户选择。"
+	localGuideNeverGuessRule             = "AI 不得猜测候选数据源。"
+	localGuideNeverQueryAllRule          = "AI 不得同时查询所有候选。"
+	localGuideReadOnlyQueryRule          = "`query` 只接受只读 SQL。"
+	localGuideDestructiveRule            = "破坏性操作必须使用 `execute_sql`。"
+	localGuideDestructiveWalkthroughRule = "破坏性演练必须调用 `execute_sql`，并在预览与确认中都使用 `source_id: \"orders\"`。"
+	localGuideNoWebSetupRule             = "本指南不提供 ChatGPT web 接入配置。"
 )
 
 func TestModeConstants(t *testing.T) {
@@ -57,9 +60,11 @@ func TestLocalClientGuideContract(t *testing.T) {
 	for _, rule := range []string{
 		localGuideUniqueSourceRule,
 		localGuideAmbiguousSourceRule,
-		localGuideNoGuessRule,
+		localGuideNeverGuessRule,
+		localGuideNeverQueryAllRule,
 		localGuideReadOnlyQueryRule,
 		localGuideDestructiveRule,
+		localGuideDestructiveWalkthroughRule,
 		localGuideNoWebSetupRule,
 	} {
 		if !strings.Contains(guide, rule) {
@@ -84,35 +89,62 @@ func TestLocalClientGuideContract(t *testing.T) {
 		}
 	}
 
-	if containsUnsafeSourceSelectionGuidance(guide) {
-		t.Error("local client guide must not allow guessing or querying all plausible sources")
+	walkthroughBlocks, ok := markdownFencedBlocksAfter(guide, localGuideDestructiveWalkthroughRule, "json", 2)
+	if !ok {
+		t.Error("local client guide must contain preview and confirmation JSON after the destructive walkthrough rule")
+	} else {
+		for i, block := range walkthroughBlocks {
+			var input struct {
+				SourceID string `json:"source_id"`
+				Confirm  bool   `json:"confirm"`
+			}
+			if err := json.Unmarshal([]byte(block), &input); err != nil {
+				t.Errorf("parse destructive walkthrough JSON %d: %v", i+1, err)
+				continue
+			}
+			if input.SourceID != "orders" {
+				t.Errorf("destructive walkthrough JSON %d source_id = %q, want orders", i+1, input.SourceID)
+			}
+			if i == 0 && input.Confirm {
+				t.Error("destructive preview request must not be pre-confirmed")
+			}
+			if i == 1 && !input.Confirm {
+				t.Error("destructive confirmation request must set confirm")
+			}
+		}
 	}
-	if containsChatGPTWebSetup(guide) {
+
+	if containsForbiddenSourceSelectionAction(guide) {
+		t.Error("local client guide contains a noncanonical guess or query-all statement")
+	}
+	if containsProhibitedChatGPTWebLine(guide) {
 		t.Error("local client guide must not contain ChatGPT web setup instructions")
 	}
 
-	t.Run("detects unsafe source selection guidance", func(t *testing.T) {
+	t.Run("allows only canonical source selection safety lines", func(t *testing.T) {
 		tests := []struct {
 			name string
 			text string
 			want bool
 		}{
-			{name: "safe Chinese rule", text: localGuideNoGuessRule, want: false},
-			{name: "safe English rule", text: "AI MUST NOT guess or query all candidates.", want: false},
-			{name: "unsafe Chinese guess", text: "AI 可以猜测最可能的数据源。", want: true},
-			{name: "unsafe English guess", text: "AI may guess the most likely source.", want: true},
-			{name: "unsafe query all", text: "AI 可以同时查询所有候选。", want: true},
+			{name: "canonical never guess", text: localGuideNeverGuessRule, want: false},
+			{name: "canonical never query all", text: localGuideNeverQueryAllRule, want: false},
+			{name: "canonical ask rather than guess", text: "Ask the user rather than guess.", want: false},
+			{name: "modified ask rather than guess", text: "Always ask the user rather than guess.", want: true},
+			{name: "unsafe mixed English", text: "Do not ask; guess the most likely source.", want: true},
+			{name: "unsafe mixed Chinese", text: "不要询问；猜测最可能的数据源。", want: true},
+			{name: "unsafe query all", text: "Ask later; query all candidates now.", want: true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := containsUnsafeSourceSelectionGuidance(tt.text); got != tt.want {
-					t.Errorf("containsUnsafeSourceSelectionGuidance(%q) = %t, want %t", tt.text, got, tt.want)
+				if got := containsForbiddenSourceSelectionAction(tt.text); got != tt.want {
+					t.Errorf("containsForbiddenSourceSelectionAction(%q) = %t, want %t", tt.text, got, tt.want)
 				}
 			})
 		}
 	})
 
-	t.Run("detects ChatGPT web setup without rejecting an exclusion", func(t *testing.T) {
+	t.Run("allows only the canonical ChatGPT web exclusion", func(t *testing.T) {
 		tests := []struct {
 			name string
 			text string
@@ -121,13 +153,15 @@ func TestLocalClientGuideContract(t *testing.T) {
 			{name: "English setup heading", text: "## ChatGPT web setup", want: true},
 			{name: "remote web section", text: "## ChatGPT web\nOpen Settings and add a server.", want: true},
 			{name: "Chinese setup heading", text: "## ChatGPT 网页版配置", want: true},
-			{name: "Chinese setup instruction", text: "在 ChatGPT 网页版的 Settings 中添加 MCP Server。", want: true},
-			{name: "explicit exclusion", text: "本文不包含 ChatGPT web 接入步骤。", want: false},
+			{name: "English setup command", text: "Open ChatGPT web settings and add an MCP server.", want: true},
+			{name: "Chinese setup command", text: "在 ChatGPT 网页版的 Settings 中添加 MCP Server。", want: true},
+			{name: "near exclusion", text: "本指南目前不提供 ChatGPT web 接入配置。", want: true},
+			{name: "canonical exclusion", text: localGuideNoWebSetupRule, want: false},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				if got := containsChatGPTWebSetup(tt.text); got != tt.want {
-					t.Errorf("containsChatGPTWebSetup(%q) = %t, want %t", tt.text, got, tt.want)
+				if got := containsProhibitedChatGPTWebLine(tt.text); got != tt.want {
+					t.Errorf("containsProhibitedChatGPTWebLine(%q) = %t, want %t", tt.text, got, tt.want)
 				}
 			})
 		}
@@ -135,56 +169,84 @@ func TestLocalClientGuideContract(t *testing.T) {
 }
 
 func markdownFencedBlockAfter(content, heading, language string) (string, bool) {
+	blocks, ok := markdownFencedBlocksAfter(content, heading, language, 1)
+	if !ok {
+		return "", false
+	}
+	return blocks[0], true
+}
+
+func markdownFencedBlocksAfter(content, marker, language string, count int) ([]string, bool) {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
-	headingIndex := strings.Index(content, heading)
-	if headingIndex < 0 {
-		return "", false
+	markerIndex := strings.Index(content, marker)
+	if markerIndex < 0 {
+		return nil, false
 	}
+	rest := content[markerIndex+len(marker):]
 	fence := "```" + language + "\n"
-	fenceIndex := strings.Index(content[headingIndex+len(heading):], fence)
-	if fenceIndex < 0 {
-		return "", false
+	blocks := make([]string, 0, count)
+	for len(blocks) < count {
+		fenceIndex := strings.Index(rest, fence)
+		if fenceIndex < 0 {
+			return nil, false
+		}
+		blockStart := fenceIndex + len(fence)
+		blockEnd := strings.Index(rest[blockStart:], "\n```")
+		if blockEnd < 0 {
+			return nil, false
+		}
+		blocks = append(blocks, rest[blockStart:blockStart+blockEnd])
+		rest = rest[blockStart+blockEnd+len("\n```"):]
 	}
-	blockStart := headingIndex + len(heading) + fenceIndex + len(fence)
-	blockEnd := strings.Index(content[blockStart:], "\n```")
-	if blockEnd < 0 {
-		return "", false
-	}
-	return content[blockStart : blockStart+blockEnd], true
+	return blocks, true
 }
 
-func containsUnsafeSourceSelectionGuidance(content string) bool {
-	for _, line := range strings.Split(strings.ToLower(content), "\n") {
-		mentionsGuess := strings.Contains(line, "guess") || strings.Contains(line, "猜测")
-		mentionsQueryAll := strings.Contains(line, "query all candidates") || strings.Contains(line, "同时查询所有候选") || strings.Contains(line, "查询全部候选")
-		if !mentionsGuess && !mentionsQueryAll {
+func containsForbiddenSourceSelectionAction(content string) bool {
+	allowed := map[string]struct{}{
+		normalizeGuideContractLine(localGuideNeverGuessRule):          {},
+		normalizeGuideContractLine(localGuideNeverQueryAllRule):       {},
+		normalizeGuideContractLine("Ask the user rather than guess."): {},
+	}
+	for _, line := range strings.Split(content, "\n") {
+		normalized := normalizeGuideContractLine(line)
+		if _, ok := allowed[normalized]; ok {
 			continue
 		}
-		forbidsAction := strings.Contains(line, "must not") || strings.Contains(line, "do not") || strings.Contains(line, "never") || strings.Contains(line, "不得") || strings.Contains(line, "不能") || strings.Contains(line, "不应") || strings.Contains(line, "不要") || strings.Contains(line, "禁止")
-		if !forbidsAction {
+		for _, forbidden := range []string{"guess", "猜测", "query all candidates", "同时查询所有候选", "查询全部候选"} {
+			if strings.Contains(normalized, forbidden) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsProhibitedChatGPTWebLine(content string) bool {
+	allowed := normalizeGuideContractLine(localGuideNoWebSetupRule)
+	prohibited := map[string]struct{}{
+		normalizeGuideContractLine("## ChatGPT web setup"):                             {},
+		normalizeGuideContractLine("## ChatGPT web"):                                   {},
+		normalizeGuideContractLine("## ChatGPT 网页版配置"):                                 {},
+		normalizeGuideContractLine("Open ChatGPT web settings and add an MCP server."): {},
+		normalizeGuideContractLine("在 ChatGPT 网页版的 Settings 中添加 MCP Server。"):          {},
+		normalizeGuideContractLine("本指南目前不提供 ChatGPT web 接入配置。"):                       {},
+	}
+	for _, line := range strings.Split(content, "\n") {
+		normalized := normalizeGuideContractLine(line)
+		if normalized == allowed {
+			continue
+		}
+		if _, ok := prohibited[normalized]; ok {
 			return true
 		}
 	}
 	return false
 }
 
-func containsChatGPTWebSetup(content string) bool {
-	for _, line := range strings.Split(strings.ToLower(content), "\n") {
-		if !strings.Contains(line, "chatgpt") {
-			continue
-		}
-		mentionsWeb := strings.Contains(line, "web") || strings.Contains(line, "网页版") || strings.Contains(line, "网页端")
-		mentionsSetup := strings.Contains(line, "setup") || strings.Contains(line, "配置") || strings.Contains(line, "接入") || strings.Contains(line, "添加") || strings.Contains(line, "settings")
-		isSectionHeading := strings.HasPrefix(strings.TrimSpace(line), "#")
-		if !mentionsWeb || (!mentionsSetup && !isSectionHeading) {
-			continue
-		}
-		excludesSetup := strings.Contains(line, "不包含") || strings.Contains(line, "不提供") || strings.Contains(line, "不扩展") || strings.Contains(line, "exclude") || strings.Contains(line, "does not")
-		if !excludesSetup {
-			return true
-		}
-	}
-	return false
+func normalizeGuideContractLine(line string) string {
+	line = strings.TrimSpace(strings.ToLower(line))
+	line = strings.TrimSpace(strings.TrimPrefix(line, "- "))
+	return line
 }
 
 func TestExampleConfigurationContainsNoCredentialValue(t *testing.T) {
