@@ -65,6 +65,8 @@ type TableDescription struct {
 type Source interface {
 	ID() string
 	Engine() string
+	// Profile returns business metadata with caller-owned Aliases and Keywords.
+	// Nil slices remain nil, and non-nil empty slices remain non-nil.
 	Profile() SourceProfile
 	DB() *sql.DB
 	Dialect() Dialect

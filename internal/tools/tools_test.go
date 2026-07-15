@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -33,8 +34,12 @@ func (s serviceTestSource) Profile() database.SourceProfile {
 			Keywords:    []string{s.engine},
 		}
 	}
-	profile.Aliases = append([]string(nil), profile.Aliases...)
-	profile.Keywords = append([]string(nil), profile.Keywords...)
+	if profile.Aliases != nil {
+		profile.Aliases = append([]string{}, profile.Aliases...)
+	}
+	if profile.Keywords != nil {
+		profile.Keywords = append([]string{}, profile.Keywords...)
+	}
 	return profile
 }
 func (s serviceTestSource) DB() *sql.DB                       { return s.db }
@@ -49,6 +54,49 @@ func newServiceWithSource(t *testing.T, mode config.Mode, source database.Source
 		t.Fatalf("new registry: %v", err)
 	}
 	return NewService(registry, mode, nil)
+}
+
+func TestServiceTestSourceProfilePreservesSlicePresence(t *testing.T) {
+	tests := []struct {
+		name     string
+		aliases  []string
+		keywords []string
+		wantJSON string
+	}{
+		{
+			name:     "nil slices",
+			wantJSON: `{"display_name":"Orders","description":"Customer payment orders","aliases":null,"keywords":null}`,
+		},
+		{
+			name:     "non-nil empty slices",
+			aliases:  []string{},
+			keywords: []string{},
+			wantJSON: `{"display_name":"Orders","description":"Customer payment orders","aliases":[],"keywords":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source := serviceTestSource{profile: database.SourceProfile{
+				DisplayName: "Orders",
+				Description: "Customer payment orders",
+				Aliases:     tt.aliases,
+				Keywords:    tt.keywords,
+			}}
+
+			first := source.Profile()
+			first.Aliases = append(first.Aliases, "caller alias")
+			first.Keywords = append(first.Keywords, "caller keyword")
+			second := source.Profile()
+			encoded, err := json.Marshal(second)
+			if err != nil {
+				t.Fatalf("json.Marshal(Profile()) error = %v", err)
+			}
+			if string(encoded) != tt.wantJSON {
+				t.Errorf("json.Marshal(Profile()) = %s, want %s", encoded, tt.wantJSON)
+			}
+		})
+	}
 }
 
 func TestQueryRejectsWriteSQLBeforeOpeningDatabase(t *testing.T) {

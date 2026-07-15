@@ -134,6 +134,62 @@ func TestSourceProfileFromConfigMapsBusinessMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestSourceProfilePreservesNilAndEmptySlices(t *testing.T) {
+	tests := []struct {
+		name     string
+		aliases  []string
+		keywords []string
+		wantJSON string
+	}{
+		{
+			name:     "nil slices",
+			wantJSON: `{"display_name":"Orders","description":"Customer payment orders","aliases":null,"keywords":null}`,
+		},
+		{
+			name:     "non-nil empty slices",
+			aliases:  []string{},
+			keywords: []string{},
+			wantJSON: `{"display_name":"Orders","description":"Customer payment orders","aliases":[],"keywords":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source := &sqlSource{profile: profileFromConfig(config.SourceConfig{
+				DisplayName: "Orders",
+				Description: "Customer payment orders",
+				Aliases:     tt.aliases,
+				Keywords:    tt.keywords,
+			})}
+
+			first := source.Profile()
+			if (first.Aliases == nil) != (tt.aliases == nil) {
+				t.Fatalf("first Profile().Aliases nil = %t, want %t", first.Aliases == nil, tt.aliases == nil)
+			}
+			if (first.Keywords == nil) != (tt.keywords == nil) {
+				t.Fatalf("first Profile().Keywords nil = %t, want %t", first.Keywords == nil, tt.keywords == nil)
+			}
+			first.Aliases = append(first.Aliases, "caller alias")
+			first.Keywords = append(first.Keywords, "caller keyword")
+
+			second := source.Profile()
+			if len(second.Aliases) != 0 || (second.Aliases == nil) != (tt.aliases == nil) {
+				t.Errorf("second Profile().Aliases = %#v, want original slice presence", second.Aliases)
+			}
+			if len(second.Keywords) != 0 || (second.Keywords == nil) != (tt.keywords == nil) {
+				t.Errorf("second Profile().Keywords = %#v, want original slice presence", second.Keywords)
+			}
+			encoded, err := json.Marshal(second)
+			if err != nil {
+				t.Fatalf("json.Marshal(Profile()) error = %v", err)
+			}
+			if string(encoded) != tt.wantJSON {
+				t.Errorf("json.Marshal(Profile()) = %s, want %s", encoded, tt.wantJSON)
+			}
+		})
+	}
+}
+
 func TestOpenRegistryPreservesSourceConfigProfiles(t *testing.T) {
 	cfg := config.Config{Sources: []config.SourceConfig{
 		{
