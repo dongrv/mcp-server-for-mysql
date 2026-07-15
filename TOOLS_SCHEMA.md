@@ -4,7 +4,7 @@ All source-specific tools take `source_id`, and may take `confirm`, `preview_has
 
 | Tool | Required fields | Purpose |
 | --- | --- | --- |
-| `list_sources` | none | Return configured source IDs and engine names. |
+| `list_sources` | none | Return configured source IDs, engines, and business profiles. |
 | `list_tables` | `source_id` | List source tables. |
 | `describe_table`, `list_indexes` | `source_id`, `table` | Read normalized metadata. |
 | `query` | `source_id`, `sql` | Run one read-only statement. |
@@ -20,12 +20,49 @@ All source-specific tools take `source_id`, and may take `confirm`, `preview_has
 
 `query` and `execute_sql` accept optional `parameters`, but parameters are valid only for a single statement. Structured `columns` use typed values such as `{"name":"status","kind":"varchar","length":32,"nullable":false}`. MySQL supports `int`, `bigint`, `varchar`, `text`, `decimal`, `boolean`, `date`, `datetime`, and `timestamp`; ClickHouse supports `int64`, `uint64`, `string`, `decimal`, `bool`, `date`, and `datetime`. Raw type fragments, expressions, defaults, and placement clauses are intentionally excluded.
 
+## Source Discovery
+
+`list_sources` returns sources in ascending `id` order. Each item has exactly this shape:
+
+```json
+{
+  "id": "orders",
+  "engine": "mysql",
+  "display_name": "Customer Orders",
+  "description": "Customer payments, order status, and refunds",
+  "aliases": ["payments"],
+  "keywords": ["orders", "refunds"]
+}
+```
+
+`aliases` and `keywords` are metadata for a client to display or search. They are not source selectors. Every source-specific tool requires `source_id` to be the exact `id` returned by `list_sources`; a display name, alias, keyword, or description is never accepted in its place. Only that exact ID is bound into confirmation hashes.
+
+The MCP server returns source metadata but does not interpret or resolve natural-language source requests. A client may use the metadata to present candidate sources. When more than one source is a plausible match, the client must ask the user to choose and must not select one automatically.
+
 ## Confirmation
 
 1. Call a tool without `confirm`.
-2. When it returns `confirmation_required`, show complete `preview.sql`, `preview.risk`, and `preview.atomic` to a human.
+2. When it returns `confirmation_required`, show complete `preview.source`, `preview.sql`, `preview.risk`, and `preview.atomic` to a human.
 3. Repeat the exact call with `confirm: true` and `preview_hash` from that response.
 4. A changed request returns `preview_mismatch`; request and approve a new preview.
+
+Every returned confirmation or replacement preview has this shape:
+
+```json
+{
+  "state": "confirmation_required",
+  "source": {
+    "id": "orders",
+    "display_name": "Customer Orders"
+  },
+  "sql": ["drop table orders"],
+  "risk": "high",
+  "atomic": false,
+  "preview_hash": "<sha256>"
+}
+```
+
+`preview.source.display_name` is response-only display metadata and does not change `preview_hash`. `preview.source.id` identifies the exact selected source and is the source value bound into the hash.
 
 `quick` previews high-risk and all multi-statement mutations. `strict` previews every non-empty SQL intent. The hash binds source, tool, normalized SQL, parameter values, risk, and atomicity. It does not authenticate a human, consume approvals once, or prevent replay; an upstream gateway must provide those controls.
 

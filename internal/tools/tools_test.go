@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -20,6 +21,7 @@ type serviceTestSource struct {
 	db      *sql.DB
 	dialect database.Dialect
 	caps    database.Capability
+	secret  string
 }
 
 func (s serviceTestSource) ID() string     { return s.id }
@@ -156,6 +158,9 @@ func TestDropTableReturnsPreviewThenExecutesMatchingConfirmation(t *testing.T) {
 	source := serviceTestSource{
 		id: "orders", engine: "mysql", db: db, dialect: database.MySQLDialect{},
 		caps: database.MySQLDialect{}.Capabilities(),
+		profile: database.SourceProfile{
+			DisplayName: "Orders", Description: "Customer payment orders",
+		},
 	}
 	service := newServiceWithSource(t, config.QuickMode, source)
 
@@ -167,6 +172,9 @@ func TestDropTableReturnsPreviewThenExecutesMatchingConfirmation(t *testing.T) {
 	}
 	if first.State != StateConfirmationRequired || first.Preview == nil || first.Preview.PreviewHash == "" {
 		t.Fatalf("first response = %#v, want confirmation preview", first)
+	}
+	if first.Preview.Source == nil || first.Preview.Source.ID != "orders" || first.Preview.Source.DisplayName != "Orders" {
+		t.Fatalf("preview source = %#v, want orders source reference", first.Preview.Source)
 	}
 
 	mock.ExpectExec("(?i)drop table orders").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -182,6 +190,75 @@ func TestDropTableReturnsPreviewThenExecutesMatchingConfirmation(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPreviewHashDoesNotBindSourceDisplayName(t *testing.T) {
+	source := &serviceTestSource{
+		id: "orders", engine: "mysql", dialect: database.MySQLDialect{},
+		caps: database.MySQLDialect{}.Capabilities(),
+		profile: database.SourceProfile{
+			DisplayName: "Orders", Description: "Customer payment orders",
+		},
+	}
+	service := newServiceWithSource(t, config.QuickMode, source)
+	input := DropTableInput{RequestMeta: RequestMeta{SourceID: "orders"}, Table: "orders"}
+
+	first, err := service.DropTable(context.Background(), input)
+	if err != nil {
+		t.Fatalf("first drop table preview: %v", err)
+	}
+	if first.Preview == nil || first.Preview.Source == nil || first.Preview.Source.DisplayName != "Orders" {
+		t.Fatalf("first preview = %#v, want Orders source reference", first.Preview)
+	}
+
+	source.profile.DisplayName = "Recharge Orders"
+	second, err := service.DropTable(context.Background(), input)
+	if err != nil {
+		t.Fatalf("second drop table preview: %v", err)
+	}
+	if second.Preview == nil || second.Preview.Source == nil || second.Preview.Source.DisplayName != "Recharge Orders" {
+		t.Fatalf("second preview = %#v, want updated source display name", second.Preview)
+	}
+	if first.Preview.PreviewHash != second.Preview.PreviewHash {
+		t.Fatalf("display name changed preview hash: %q != %q", first.Preview.PreviewHash, second.Preview.PreviewHash)
+	}
+	if first.Preview.Source == second.Preview.Source {
+		t.Fatal("preview responses must not share source reference pointers")
+	}
+	if first.Preview.Source.DisplayName != "Orders" {
+		t.Fatalf("first preview source changed through shared state: %#v", first.Preview.Source)
+	}
+}
+
+func TestPreviewMismatchCarriesReplacementSourceReference(t *testing.T) {
+	service := newServiceWithSource(t, config.QuickMode, serviceTestSource{
+		id: "orders", engine: "mysql", dialect: database.MySQLDialect{},
+		caps: database.MySQLDialect{}.Capabilities(),
+		profile: database.SourceProfile{
+			DisplayName: "Orders", Description: "Customer payment orders",
+		},
+	})
+	input := DropTableInput{RequestMeta: RequestMeta{SourceID: "orders"}, Table: "orders"}
+
+	first, err := service.DropTable(context.Background(), input)
+	if err != nil {
+		t.Fatalf("initial drop table preview: %v", err)
+	}
+	input.Confirm = true
+	input.PreviewHash = "stale-preview-hash"
+	replacement, err := service.DropTable(context.Background(), input)
+	if !errors.Is(err, ErrPreviewMismatch) {
+		t.Fatalf("mismatched confirmation error = %v, want %v", err, ErrPreviewMismatch)
+	}
+	if replacement.State != StatePreviewMismatch || replacement.Preview == nil {
+		t.Fatalf("replacement response = %#v, want preview mismatch", replacement)
+	}
+	if replacement.Preview.PreviewHash != first.Preview.PreviewHash {
+		t.Fatalf("replacement preview hash = %q, want %q", replacement.Preview.PreviewHash, first.Preview.PreviewHash)
+	}
+	if replacement.Preview.Source == nil || replacement.Preview.Source.ID != "orders" || replacement.Preview.Source.DisplayName != "Orders" {
+		t.Fatalf("replacement preview source = %#v, want orders source reference", replacement.Preview.Source)
 	}
 }
 
@@ -218,11 +295,13 @@ func TestStrictModePreviewsReadOnlyQueryAndMatchingConfirmationQueries(t *testin
 	}
 }
 
-func TestListSourcesExposesOnlyConfiguredIDsAndEngines(t *testing.T) {
+func TestListSourcesExposesBusinessProfilesWithoutConnectionData(t *testing.T) {
+	const fakeSecret = "mysql://source-user:fake-secret-password@db.internal/orders"
 	registry, err := database.NewRegistry([]database.Source{
 		serviceTestSource{
 			id: "orders", engine: "mysql", dialect: database.MySQLDialect{},
 			profile: database.SourceProfile{DisplayName: "Orders", Description: "Customer payment orders", Aliases: []string{"payments"}, Keywords: []string{"orders", "refunds"}},
+			secret:  fakeSecret,
 		},
 		serviceTestSource{
 			id: "events", engine: "clickhouse", dialect: database.ClickHouseDialect{},
@@ -238,10 +317,77 @@ func TestListSourcesExposesOnlyConfiguredIDsAndEngines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list sources: %v", err)
 	}
-	if len(sources) != 2 || sources[0].ID != "events" || sources[1].ID != "orders" {
-		t.Fatalf("sources = %#v", sources)
+	encoded, err := json.Marshal(sources)
+	if err != nil {
+		t.Fatalf("json.Marshal(ListSources()) error = %v", err)
+	}
+	want := `[{"id":"events","engine":"clickhouse","display_name":"Events","description":"Product event analytics","aliases":["analytics"],"keywords":["events","metrics"]},{"id":"orders","engine":"mysql","display_name":"Orders","description":"Customer payment orders","aliases":["payments"],"keywords":["orders","refunds"]}]`
+	if string(encoded) != want {
+		t.Fatalf("json.Marshal(ListSources()) = %s, want %s", encoded, want)
+	}
+	for _, forbidden := range []string{"dsn", "host", "username", "password", "pool", "capabilities", fakeSecret} {
+		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(forbidden)) {
+			t.Errorf("list_sources JSON contains forbidden connection detail %q: %s", forbidden, encoded)
+		}
 	}
 }
+
+func TestListSourcesPreservesSlicePresenceAndReturnsOwnedSlices(t *testing.T) {
+	shared := &sharedProfileSource{serviceTestSource: serviceTestSource{
+		id: "shared", engine: "mysql", dialect: database.MySQLDialect{},
+		profile: database.SourceProfile{
+			DisplayName: "Shared", Description: "Shared source",
+			Aliases: []string{"shared-alias"}, Keywords: []string{"shared-keyword"},
+		},
+	}}
+	registry, err := database.NewRegistry([]database.Source{
+		serviceTestSource{
+			id: "nil", engine: "mysql", dialect: database.MySQLDialect{},
+			profile: database.SourceProfile{DisplayName: "Nil", Description: "Nil slices"},
+		},
+		serviceTestSource{
+			id: "empty", engine: "mysql", dialect: database.MySQLDialect{},
+			profile: database.SourceProfile{DisplayName: "Empty", Description: "Empty slices", Aliases: []string{}, Keywords: []string{}},
+		},
+		shared,
+	})
+	if err != nil {
+		t.Fatalf("new registry: %v", err)
+	}
+	service := NewService(registry, config.QuickMode, nil)
+
+	first, err := service.ListSources(context.Background(), RequestMeta{})
+	if err != nil {
+		t.Fatalf("first list sources: %v", err)
+	}
+	encoded, err := json.Marshal(first)
+	if err != nil {
+		t.Fatalf("json.Marshal(first ListSources()) error = %v", err)
+	}
+	want := `[{"id":"empty","engine":"mysql","display_name":"Empty","description":"Empty slices","aliases":[],"keywords":[]},{"id":"nil","engine":"mysql","display_name":"Nil","description":"Nil slices","aliases":null,"keywords":null},{"id":"shared","engine":"mysql","display_name":"Shared","description":"Shared source","aliases":["shared-alias"],"keywords":["shared-keyword"]}]`
+	if string(encoded) != want {
+		t.Fatalf("json.Marshal(first ListSources()) = %s, want %s", encoded, want)
+	}
+
+	first[2].Aliases[0] = "caller-alias"
+	first[2].Keywords[0] = "caller-keyword"
+	if shared.profile.Aliases[0] != "shared-alias" || shared.profile.Keywords[0] != "shared-keyword" {
+		t.Fatalf("source profile was mutated through list response: %#v", shared.profile)
+	}
+	second, err := service.ListSources(context.Background(), RequestMeta{})
+	if err != nil {
+		t.Fatalf("second list sources: %v", err)
+	}
+	if second[2].Aliases[0] != "shared-alias" || second[2].Keywords[0] != "shared-keyword" {
+		t.Fatalf("second list response shares slices with first: %#v", second[2])
+	}
+}
+
+type sharedProfileSource struct {
+	serviceTestSource
+}
+
+func (s *sharedProfileSource) Profile() database.SourceProfile { return s.profile }
 
 func TestQuickModePreviewsMultiStatementExecuteSQL(t *testing.T) {
 	db, mock, err := sqlmock.New()

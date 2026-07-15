@@ -35,8 +35,12 @@ func NewService(registry *database.Registry, mode config.Mode, executor *executi
 }
 
 type SourceInfo struct {
-	ID     string `json:"id"`
-	Engine string `json:"engine"`
+	ID          string   `json:"id"`
+	Engine      string   `json:"engine"`
+	DisplayName string   `json:"display_name"`
+	Description string   `json:"description"`
+	Aliases     []string `json:"aliases"`
+	Keywords    []string `json:"keywords"`
 }
 
 func (s *Service) ListSources(_ context.Context, _ RequestMeta) ([]SourceInfo, error) {
@@ -46,7 +50,21 @@ func (s *Service) ListSources(_ context.Context, _ RequestMeta) ([]SourceInfo, e
 	sources := s.registry.Sources()
 	result := make([]SourceInfo, len(sources))
 	for i, source := range sources {
-		result[i] = SourceInfo{ID: source.ID(), Engine: source.Engine()}
+		profile := source.Profile()
+		if profile.Aliases != nil {
+			profile.Aliases = append([]string{}, profile.Aliases...)
+		}
+		if profile.Keywords != nil {
+			profile.Keywords = append([]string{}, profile.Keywords...)
+		}
+		result[i] = SourceInfo{
+			ID:          source.ID(),
+			Engine:      source.Engine(),
+			DisplayName: profile.DisplayName,
+			Description: profile.Description,
+			Aliases:     profile.Aliases,
+			Keywords:    profile.Keywords,
+		}
 	}
 	return result, nil
 }
@@ -274,6 +292,8 @@ func (s *Service) authorize(requestID string, meta RequestMeta, source database.
 	if err != nil {
 		return Response{RequestID: requestID}, false, newToolError(CodeUnsafeSQL, errors.Join(ErrUnsafeSQL, err))
 	}
+	profile := source.Profile()
+	preview.Source = &execution.SourceReference{ID: source.ID(), DisplayName: profile.DisplayName}
 	switch decision.State {
 	case execution.ExecuteNow:
 		return Response{RequestID: requestID, State: StateExecuted}, true, nil

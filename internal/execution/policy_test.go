@@ -121,6 +121,14 @@ func TestBuildPreviewHashBindsSourceToolRiskAtomicStatementOrderAndParameters(t 
 	}
 }
 
+func TestBuildPreviewLeavesSourceReferenceForResponseDecoration(t *testing.T) {
+	preview := mustBuildPreview(t, highRiskIntent())
+
+	if preview.Source != nil {
+		t.Fatalf("BuildPreview() source = %#v, want response layer to attach it", preview.Source)
+	}
+}
+
 func TestAuthorizeAcceptsMatchingConfirmationForCompleteIntent(t *testing.T) {
 	intent := highRiskIntent()
 	_, preview, err := Authorize(config.QuickMode, intent, Confirmation{})

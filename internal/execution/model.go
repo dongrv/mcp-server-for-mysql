@@ -40,12 +40,20 @@ type Intent struct {
 	Plan       sqlguard.Plan
 }
 
+// SourceReference identifies the selected source in caller-visible responses.
+// DisplayName is descriptive metadata; only ID is execution-relevant.
+type SourceReference struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
 // Preview is the complete, caller-visible description of an operation that
 // requires confirmation. PreviewHash binds every execution-relevant field.
 type Preview struct {
-	State       string   `json:"state"`
-	SQL         []string `json:"sql"`
-	Risk        string   `json:"risk"`
-	Atomic      bool     `json:"atomic"`
-	PreviewHash string   `json:"preview_hash"`
+	State       string           `json:"state"`
+	Source      *SourceReference `json:"source,omitempty"`
+	SQL         []string         `json:"sql"`
+	Risk        string           `json:"risk"`
+	Atomic      bool             `json:"atomic"`
+	PreviewHash string           `json:"preview_hash"`
 }
