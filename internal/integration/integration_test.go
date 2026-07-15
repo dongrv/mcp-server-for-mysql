@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	defaultMySQLDSN      = "mcp:mcp@tcp(127.0.0.1:13306)/mcp_test?parseTime=true"
+	defaultMySQLDSN      = "orders_test:orders_test@tcp(127.0.0.1:13306)/orders_test?parseTime=true"
+	defaultLogsMySQLDSN  = "logs_test:logs_test@tcp(127.0.0.1:23306)/logs_test?parseTime=true"
 	defaultClickHouseDSN = "clickhouse://mcp:mcp@127.0.0.1:19000/mcp_test?dial_timeout=10s"
 )
 
@@ -32,9 +33,33 @@ func openIntegrationService(t *testing.T, mode config.Mode) (*tools.Service, *da
 	t.Helper()
 	requireIntegration(t)
 	t.Setenv("INTEGRATION_MYSQL_DSN", integrationMySQLDSN())
+	t.Setenv("INTEGRATION_LOGS_MYSQL_DSN", integrationLogsMySQLDSN())
 	t.Setenv("INTEGRATION_CLICKHOUSE_DSN", integrationClickHouseDSN())
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	contents := fmt.Sprintf("mode: %s\nsources:\n  - name: orders\n    display_name: Orders\n    description: Integration payment orders\n    type: mysql\n    dsn: ${INTEGRATION_MYSQL_DSN}\n  - name: analytics\n    display_name: Analytics\n    description: Integration event analytics\n    type: clickhouse\n    dsn: ${INTEGRATION_CLICKHOUSE_DSN}\n", mode)
+	contents := fmt.Sprintf(`mode: %s
+sources:
+  - name: orders
+    display_name: 订单库
+    description: 充值与订单业务数据
+    aliases: [充值库, 订单系统]
+    keywords: [充值, 订单]
+    type: mysql
+    dsn: ${INTEGRATION_MYSQL_DSN}
+  - name: logs
+    display_name: 日志库
+    description: 服务运行与错误日志
+    aliases: [服务日志]
+    keywords: [日志, 错误]
+    type: mysql
+    dsn: ${INTEGRATION_LOGS_MYSQL_DSN}
+  - name: analytics
+    display_name: 分析库
+    description: 业务分析与指标数据
+    aliases: [数据分析]
+    keywords: [分析, 指标]
+    type: clickhouse
+    dsn: ${INTEGRATION_CLICKHOUSE_DSN}
+`, mode)
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatalf("write integration configuration: %v", err)
 	}
@@ -61,6 +86,13 @@ func integrationMySQLDSN() string {
 		return dsn
 	}
 	return defaultMySQLDSN
+}
+
+func integrationLogsMySQLDSN() string {
+	if dsn := os.Getenv("INTEGRATION_LOGS_MYSQL_DSN"); dsn != "" {
+		return dsn
+	}
+	return defaultLogsMySQLDSN
 }
 
 func integrationClickHouseDSN() string {
