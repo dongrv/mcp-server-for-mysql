@@ -26,6 +26,7 @@ go.work.sum
 
 # env file
 .env
+/mcp-database.env
 
 # Local Git worktrees used for isolated development
 .worktrees/

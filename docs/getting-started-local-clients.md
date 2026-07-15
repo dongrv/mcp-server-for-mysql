@@ -1,6 +1,6 @@
 # Claude Desktop 与 Codex 本地接入指南
 
-本指南面向第一次把数据库 MCP Server 接入本地 AI 客户端的开发者，主流程只覆盖 Claude Desktop 与 Codex，以及两种启动方式：本地二进制和 Docker。本文不把任何真实账号、密码或 DSN 写进仓库，也不包含网页端客户端的接入步骤。
+本指南面向第一次把数据库 MCP Server 接入本地 AI 客户端的开发者，主流程只覆盖 Claude Desktop 与 Codex，以及两种启动方式：本地二进制和 Docker。本文不把任何真实账号、密码或 DSN 写进仓库。本指南不提供 ChatGPT web 接入配置。
 
 ## 1. 准备环境
 
@@ -13,9 +13,41 @@
 
 下面所有 `PLACEHOLDER_*`、`*.example.invalid` 和 `/ABSOLUTE/PATH/*` 都是不可直接连接的占位符。请只在本机替换它们，不要提交含真实凭据的 `config.yaml`、客户端配置或 `.env` 文件。
 
-## 2. 配置三个数据源
+## 2. 最小可运行配置：一个 orders MySQL 数据源
 
-在仓库根目录从 `config.example.yaml` 复制出本机专用的 `config.yaml`。配置文件只引用环境变量；orders 和 logs 是两个相互独立的 MySQL 实例，analytics 是 ClickHouse 实例：
+第一次运行只需要一个 MySQL 数据库。在仓库根目录创建本机专用的 `config.yaml`，先配置 orders：
+
+```yaml
+mode: quick
+sources:
+  - name: orders
+    display_name: 订单库
+    description: 用户充值订单、支付状态与退款记录
+    aliases: [充值库, 支付订单]
+    keywords: [充值, 支付, 退款, 用户]
+    type: mysql
+    dsn: ${ORDERS_DSN}
+```
+
+`name` 是工具调用中唯一有效的 `source_id`。`display_name`、`description`、`aliases` 和 `keywords` 只帮助 AI 理解业务含义，不能代替 `source_id`。本节的单源配置只需要 `ORDERS_DSN`，不需要 logs 或 analytics 的环境变量。
+
+先在本机终端设置这一项 DSN。以下字符串只是格式示例，使用了保留域名和明显的占位内容，不能连接真实数据库。
+
+Windows PowerShell：
+
+```powershell
+$env:ORDERS_DSN = 'PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(orders-db.example.invalid:3306)/PLACEHOLDER_ORDERS_DB?parseTime=true'
+```
+
+macOS、Linux 或其他 Unix shell：
+
+```sh
+export ORDERS_DSN='PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(orders-db.example.invalid:3306)/PLACEHOLDER_ORDERS_DB?parseTime=true'
+```
+
+### 扩展为 orders、logs 与 analytics 三个数据源
+
+需要体验第 7 节的自然语言选库和多候选流程时，再把 `config.yaml` 扩展为下面三个独立 profile。orders 和 logs 是不同的 MySQL 实例，analytics 是 ClickHouse 实例：
 
 ```yaml
 mode: quick
@@ -43,14 +75,11 @@ sources:
     dsn: ${ANALYTICS_DSN}
 ```
 
-`name` 是工具调用中唯一有效的 `source_id`。`display_name`、`description`、`aliases` 和 `keywords` 只帮助 AI 理解业务含义，不能代替 `source_id`。
-
-先在本机终端设置 DSN。以下字符串只是格式示例，使用了保留域名和明显的占位内容，不能连接真实数据库。
+选择三数据源配置时，除了已经设置的 `ORDERS_DSN`，还要设置另外两项：
 
 Windows PowerShell：
 
 ```powershell
-$env:ORDERS_DSN = 'PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(orders-db.example.invalid:3306)/PLACEHOLDER_ORDERS_DB?parseTime=true'
 $env:LOGS_DSN = 'PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(logs-db.example.invalid:3306)/PLACEHOLDER_LOGS_DB?parseTime=true'
 $env:ANALYTICS_DSN = 'clickhouse://PLACEHOLDER_USER:PLACEHOLDER_SECRET@analytics.example.invalid:9000/PLACEHOLDER_ANALYTICS_DB'
 ```
@@ -58,7 +87,6 @@ $env:ANALYTICS_DSN = 'clickhouse://PLACEHOLDER_USER:PLACEHOLDER_SECRET@analytics
 macOS、Linux 或其他 Unix shell：
 
 ```sh
-export ORDERS_DSN='PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(orders-db.example.invalid:3306)/PLACEHOLDER_ORDERS_DB?parseTime=true'
 export LOGS_DSN='PLACEHOLDER_USER:PLACEHOLDER_SECRET@tcp(logs-db.example.invalid:3306)/PLACEHOLDER_LOGS_DB?parseTime=true'
 export ANALYTICS_DSN='clickhouse://PLACEHOLDER_USER:PLACEHOLDER_SECRET@analytics.example.invalid:9000/PLACEHOLDER_ANALYTICS_DB'
 ```
@@ -85,6 +113,8 @@ go build -o ./build/mcp-database ./cmd
 
 ## 4. Claude Desktop 使用本地二进制
 
+本节配置选择第 2 节的单源 starter，因此 Claude Desktop 只传 `ORDERS_DSN`。如果你已经切换到三数据源扩展，再在同一个 `env` 对象中添加 `LOGS_DSN` 和 `ANALYTICS_DSN`。
+
 Claude Desktop 的开发者配置文件位于：
 
 - Windows：`%APPDATA%\Claude\claude_desktop_config.json`
@@ -104,9 +134,7 @@ Windows JSON 示例：
         "C:\\ABSOLUTE\\PATH\\TO\\config.yaml"
       ],
       "env": {
-        "ORDERS_DSN": "REPLACE_LOCALLY_WITH_ORDERS_DSN",
-        "LOGS_DSN": "REPLACE_LOCALLY_WITH_LOGS_DSN",
-        "ANALYTICS_DSN": "REPLACE_LOCALLY_WITH_ANALYTICS_DSN"
+        "ORDERS_DSN": "REPLACE_LOCALLY_WITH_ORDERS_DSN"
       }
     }
   }
@@ -127,9 +155,7 @@ macOS JSON 示例：
         "/ABSOLUTE/PATH/TO/config.yaml"
       ],
       "env": {
-        "ORDERS_DSN": "REPLACE_LOCALLY_WITH_ORDERS_DSN",
-        "LOGS_DSN": "REPLACE_LOCALLY_WITH_LOGS_DSN",
-        "ANALYTICS_DSN": "REPLACE_LOCALLY_WITH_ANALYTICS_DSN"
+        "ORDERS_DSN": "REPLACE_LOCALLY_WITH_ORDERS_DSN"
       }
     }
   }
@@ -140,6 +166,8 @@ macOS JSON 示例：
 
 ## 5. Codex 使用本地二进制
 
+下面同样选择单源 starter，只向 Codex 提供 `ORDERS_DSN`。使用三数据源扩展时，CLI 命令再增加两个 `--env`，或在 TOML 的 `env_vars` 中增加 `LOGS_DSN` 和 `ANALYTICS_DSN`。
+
 当前 Codex CLI 的 stdio 语法是 `codex mcp add <name> --env KEY=VALUE -- <command>...`。本指南同时用本机 `codex mcp add --help` 和 [OpenAI Codex MCP 官方文档](https://developers.openai.com/codex/mcp/) 校验了下列形式。
 
 macOS、Linux 或其他 Unix shell：
@@ -147,8 +175,6 @@ macOS、Linux 或其他 Unix shell：
 ```sh
 codex mcp add secure-database \
   --env "ORDERS_DSN=$ORDERS_DSN" \
-  --env "LOGS_DSN=$LOGS_DSN" \
-  --env "ANALYTICS_DSN=$ANALYTICS_DSN" \
   -- /ABSOLUTE/PATH/TO/mcp-database -config /ABSOLUTE/PATH/TO/config.yaml
 ```
 
@@ -157,8 +183,6 @@ Windows PowerShell：
 ```powershell
 codex mcp add secure-database `
   --env "ORDERS_DSN=$env:ORDERS_DSN" `
-  --env "LOGS_DSN=$env:LOGS_DSN" `
-  --env "ANALYTICS_DSN=$env:ANALYTICS_DSN" `
   -- 'C:\ABSOLUTE\PATH\TO\mcp-database.exe' -config 'C:\ABSOLUTE\PATH\TO\config.yaml'
 ```
 
@@ -170,7 +194,7 @@ codex mcp add secure-database `
 [mcp_servers.secure-database]
 command = "/ABSOLUTE/PATH/TO/mcp-database"
 args = ["-config", "/ABSOLUTE/PATH/TO/config.yaml"]
-env_vars = ["ORDERS_DSN", "LOGS_DSN", "ANALYTICS_DSN"]
+env_vars = ["ORDERS_DSN"]
 ```
 
 Windows 上把 `command` 和 `args` 改为绝对路径；TOML 基本字符串中的反斜杠需要转义，或者使用正斜杠，例如 `C:/ABSOLUTE/PATH/TO/mcp-database.exe`。
@@ -178,6 +202,8 @@ Windows 上把 `command` 和 `args` 改为绝对路径；TOML 基本字符串中
 OpenAI 官方文档说明，同一 Codex host 上的 ChatGPT Desktop、Codex CLI 和 Codex IDE 扩展共享这份本地 MCP 配置，配置一次后可在这些本地客户端间切换。本文不扩展到其他接入方式。
 
 ## 6. 使用 Docker 启动 stdio Server
+
+本节的 Docker 示例仍选择单源 starter，所以 `mcp-database.env` 只包含 `ORDERS_DSN`。使用三数据源扩展时，再添加 `LOGS_DSN` 和 `ANALYTICS_DSN` 两行；Docker 和两个客户端配置本身不需要其他改动。
 
 先构建本地镜像：
 
@@ -189,9 +215,15 @@ docker build -t secure-database-mcp:local .
 
 ```dotenv
 ORDERS_DSN=REPLACE_LOCALLY_WITH_ORDERS_DSN
-LOGS_DSN=REPLACE_LOCALLY_WITH_LOGS_DSN
-ANALYTICS_DSN=REPLACE_LOCALLY_WITH_ANALYTICS_DSN
 ```
+
+仓库的 `.gitignore` 精确忽略根目录 `/mcp-database.env`，但忽略规则不是权限控制。macOS、Linux 或其他 Unix 系统创建文件后执行：
+
+```sh
+chmod 600 ./mcp-database.env
+```
+
+Windows 上应把该文件放在仅当前用户可访问的目录，并在文件属性的 Security 页面确认没有共享用户权限；团队共享仓库、网络共享目录和公共同步目录中不要保存真实 DSN。即使使用仓库根目录的已忽略文件，也不要把它发送到聊天或提交到其他仓库。
 
 先在终端验证容器命令。`-i` 必须保留，因为 MCP 使用 stdin/stdout；配置文件以只读方式挂载：
 
@@ -275,6 +307,14 @@ codex mcp add secure-database-docker -- `
 
 ## 7. 验证发现与选库
 
+客户端选择数据源时必须遵守以下稳定规则：
+
+- 唯一匹配时，AI 必须使用该候选的精确 `source_id`。
+- 多候选时，AI 必须列出候选的 `display_name` 和 `description`，并等待用户选择。
+- AI 不得猜测，也不得同时查询所有候选。
+
+下面的唯一候选和多候选示例使用第 2 节的三数据源扩展。如果你保持单源 starter，先完成 `orders` 的 `list_sources`、`list_tables` 和查询验证即可。
+
 重启客户端后，新建对话并先说：
 
 > 请调用 `list_sources`，按 `source_id` 列出每个数据源的 `display_name` 和 `description`；然后对 `orders` 调用 `list_tables`。
@@ -305,7 +345,7 @@ AI 应先用 `list_sources` 确认“订单库”唯一对应 `orders`，必要�
 
 ## 8. 查询、严格模式与高风险确认
 
-`query` 只接受一条只读 SQL，不能执行 `DELETE` 或其他写操作。在默认 `quick` 模式下，单条只读 `query` 可以直接执行；写操作必须调用 `execute_sql`，高风险变更和多语句变更会先返回预览。若希望所有非空 SQL（包括只读查询）都经过确认，把 `config.yaml` 第一行改为：
+`query` 只接受只读 SQL。它不能执行 `DELETE` 或其他写操作。破坏性操作必须使用 `execute_sql`。在默认 `quick` 模式下，单条只读 `query` 可以直接执行；高风险变更和多语句变更会先返回预览。若希望所有非空 SQL（包括只读查询）都经过确认，把 `config.yaml` 第一行改为：
 
 ```yaml
 mode: strict

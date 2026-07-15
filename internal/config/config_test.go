@@ -9,6 +9,16 @@ import (
 	"testing"
 )
 
+const (
+	localGuideStarterHeading      = "## 2. 最小可运行配置：一个 orders MySQL 数据源"
+	localGuideUniqueSourceRule    = "唯一匹配时，AI 必须使用该候选的精确 `source_id`。"
+	localGuideAmbiguousSourceRule = "多候选时，AI 必须列出候选的 `display_name` 和 `description`，并等待用户选择。"
+	localGuideNoGuessRule         = "AI 不得猜测，也不得同时查询所有候选。"
+	localGuideReadOnlyQueryRule   = "`query` 只接受只读 SQL。"
+	localGuideDestructiveRule     = "破坏性操作必须使用 `execute_sql`。"
+	localGuideNoWebSetupRule      = "本指南不提供 ChatGPT web 接入配置。"
+)
+
 func TestModeConstants(t *testing.T) {
 	if QuickMode != Mode("quick") {
 		t.Errorf("QuickMode = %q, want quick", QuickMode)
@@ -32,10 +42,7 @@ func TestLocalClientGuideContract(t *testing.T) {
 		"Docker",
 		"list_sources",
 		"list_tables",
-		"多候选",
 		"preview_hash",
-		"source_id",
-		"execute_sql",
 		"Codex Docker（PowerShell）",
 	} {
 		if !strings.Contains(guide, anchor) {
@@ -47,9 +54,63 @@ func TestLocalClientGuideContract(t *testing.T) {
 			t.Errorf("local client guide must not contain legacy setup guidance %q", legacy)
 		}
 	}
+	for _, rule := range []string{
+		localGuideUniqueSourceRule,
+		localGuideAmbiguousSourceRule,
+		localGuideNoGuessRule,
+		localGuideReadOnlyQueryRule,
+		localGuideDestructiveRule,
+		localGuideNoWebSetupRule,
+	} {
+		if !strings.Contains(guide, rule) {
+			t.Errorf("local client guide must contain exact safety rule %q", rule)
+		}
+	}
+
+	starter, ok := markdownFencedBlockAfter(guide, localGuideStarterHeading, "yaml")
+	if !ok {
+		t.Errorf("local client guide must contain a YAML block after %q", localGuideStarterHeading)
+	} else {
+		if strings.Count(starter, "- name:") != 1 || !strings.Contains(starter, "- name: orders") {
+			t.Errorf("starter YAML must contain exactly one orders source:\n%s", starter)
+		}
+		if !strings.Contains(starter, "${ORDERS_DSN}") {
+			t.Error("starter YAML must reference ORDERS_DSN")
+		}
+		for _, extra := range []string{"LOGS_DSN", "ANALYTICS_DSN"} {
+			if strings.Contains(starter, extra) {
+				t.Errorf("starter YAML must not require %s", extra)
+			}
+		}
+	}
+
+	if containsUnsafeSourceSelectionGuidance(guide) {
+		t.Error("local client guide must not allow guessing or querying all plausible sources")
+	}
 	if containsChatGPTWebSetup(guide) {
 		t.Error("local client guide must not contain ChatGPT web setup instructions")
 	}
+
+	t.Run("detects unsafe source selection guidance", func(t *testing.T) {
+		tests := []struct {
+			name string
+			text string
+			want bool
+		}{
+			{name: "safe Chinese rule", text: localGuideNoGuessRule, want: false},
+			{name: "safe English rule", text: "AI MUST NOT guess or query all candidates.", want: false},
+			{name: "unsafe Chinese guess", text: "AI 可以猜测最可能的数据源。", want: true},
+			{name: "unsafe English guess", text: "AI may guess the most likely source.", want: true},
+			{name: "unsafe query all", text: "AI 可以同时查询所有候选。", want: true},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := containsUnsafeSourceSelectionGuidance(tt.text); got != tt.want {
+					t.Errorf("containsUnsafeSourceSelectionGuidance(%q) = %t, want %t", tt.text, got, tt.want)
+				}
+			})
+		}
+	})
 
 	t.Run("detects ChatGPT web setup without rejecting an exclusion", func(t *testing.T) {
 		tests := []struct {
@@ -71,6 +132,40 @@ func TestLocalClientGuideContract(t *testing.T) {
 			})
 		}
 	})
+}
+
+func markdownFencedBlockAfter(content, heading, language string) (string, bool) {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	headingIndex := strings.Index(content, heading)
+	if headingIndex < 0 {
+		return "", false
+	}
+	fence := "```" + language + "\n"
+	fenceIndex := strings.Index(content[headingIndex+len(heading):], fence)
+	if fenceIndex < 0 {
+		return "", false
+	}
+	blockStart := headingIndex + len(heading) + fenceIndex + len(fence)
+	blockEnd := strings.Index(content[blockStart:], "\n```")
+	if blockEnd < 0 {
+		return "", false
+	}
+	return content[blockStart : blockStart+blockEnd], true
+}
+
+func containsUnsafeSourceSelectionGuidance(content string) bool {
+	for _, line := range strings.Split(strings.ToLower(content), "\n") {
+		mentionsGuess := strings.Contains(line, "guess") || strings.Contains(line, "猜测")
+		mentionsQueryAll := strings.Contains(line, "query all candidates") || strings.Contains(line, "同时查询所有候选") || strings.Contains(line, "查询全部候选")
+		if !mentionsGuess && !mentionsQueryAll {
+			continue
+		}
+		forbidsAction := strings.Contains(line, "must not") || strings.Contains(line, "do not") || strings.Contains(line, "never") || strings.Contains(line, "不得") || strings.Contains(line, "不能") || strings.Contains(line, "不应") || strings.Contains(line, "不要") || strings.Contains(line, "禁止")
+		if !forbidsAction {
+			return true
+		}
+	}
+	return false
 }
 
 func containsChatGPTWebSetup(content string) bool {
