@@ -16,6 +16,19 @@ func TestModeConstants(t *testing.T) {
 	}
 }
 
+func TestExampleConfigurationContainsNoCredentialValue(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "config.example.yaml"))
+	if err != nil {
+		t.Fatalf("read example configuration: %v", err)
+	}
+	if strings.Contains(string(content), "password:") {
+		t.Fatal("example configuration must not contain a password field")
+	}
+	if !strings.Contains(string(content), "${ORDERS_DSN}") {
+		t.Fatal("example configuration must contain the MySQL DSN environment reference")
+	}
+}
+
 func TestLoadDefaultsToQuickAndExpandsSourceDSNs(t *testing.T) {
 	path := writeConfig(t, `
 sources:
