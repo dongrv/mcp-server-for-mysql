@@ -1,10 +1,9 @@
 {
-  "mcpServers": {
+  "context_servers": {
     "secure-database": {
       "command": "/absolute/path/to/mcp-database",
       "args": ["-config", "/absolute/path/to/config.yaml"],
-      "env": {},
-      "disabled": false
+      "env": {}
     }
   }
 }

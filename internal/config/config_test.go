@@ -18,6 +18,35 @@ func TestModeConstants(t *testing.T) {
 	}
 }
 
+func TestLocalClientGuideContract(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "docs", "getting-started-local-clients.md"))
+	if err != nil {
+		t.Fatalf("read local client guide: %v", err)
+	}
+
+	guide := string(content)
+	for _, anchor := range []string{
+		"Claude Desktop",
+		"Codex",
+		"本地二进制",
+		"Docker",
+		"list_sources",
+		"list_tables",
+		"多候选",
+		"preview_hash",
+		"source_id",
+	} {
+		if !strings.Contains(guide, anchor) {
+			t.Errorf("local client guide must contain %q", anchor)
+		}
+	}
+	for _, legacy := range []string{"MYSQL_HOST", "mysql_begin_transaction"} {
+		if strings.Contains(guide, legacy) {
+			t.Errorf("local client guide must not contain legacy setup guidance %q", legacy)
+		}
+	}
+}
+
 func TestExampleConfigurationContainsNoCredentialValue(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "config.example.yaml"))
 	if err != nil {

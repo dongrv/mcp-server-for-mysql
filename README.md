@@ -2,6 +2,8 @@
 
 This query-first, stateless MCP server connects to multiple configured MySQL and ClickHouse sources. It is designed for teams to inspect known tables and run bounded read-only queries, with dialect-aware safety controls for data and schema changes.
 
+New to local MCP clients? Follow the Chinese beginner guide for complete Claude Desktop and Codex setup with a local binary or Docker: **[Claude Desktop 与 Codex 本地接入指南](docs/getting-started-local-clients.md)**.
+
 ## Configuration
 
 Copy `config.example.yaml` to a local `config.yaml`, then provide each DSN through the environment:
@@ -10,14 +12,29 @@ Copy `config.example.yaml` to a local `config.yaml`, then provide each DSN throu
 mode: quick
 sources:
   - name: orders
+    display_name: 订单库
+    description: 用户充值订单、支付状态与退款记录
+    aliases: [充值库, 支付订单]
+    keywords: [充值, 支付, 退款]
     type: mysql
     dsn: ${ORDERS_DSN}
+  - name: logs
+    display_name: 日志库
+    description: 服务运行日志、错误事件与审计记录
+    aliases: [服务日志, 错误日志]
+    keywords: [报错, 审计, 故障排查]
+    type: mysql
+    dsn: ${LOGS_DSN}
   - name: analytics
+    display_name: 分析库
+    description: 聚合指标、用户行为与经营分析数据
+    aliases: [数仓, 经营分析]
+    keywords: [指标, 趋势, 用户行为]
     type: clickhouse
     dsn: ${ANALYTICS_DSN}
 ```
 
-Each name is the unique `source_id` used in MCP calls. Every DSN must be an exact environment reference. Unknown YAML fields, duplicate names, unsupported source types, and absent or empty DSN values fail startup without displaying the resolved DSN.
+Each name is the unique `source_id` used in MCP calls. The required `display_name` and `description`, plus optional aliases and keywords, help AI clients explain source choices but never replace the exact ID. Every DSN must be an exact environment reference. Unknown YAML fields, duplicate names, invalid source profiles, unsupported source types, and absent or empty DSN values fail startup without displaying the resolved DSN.
 
 Build with `go build -o build/mcp-database ./cmd`, then run `./build/mcp-database -config config.yaml`. On Windows use `start.bat run path\\to\\config.yaml`; on Unix-like systems use `CONFIG_PATH=path/to/config.yaml ./start.sh run`.
 
@@ -35,7 +52,9 @@ Use separate least-privilege database accounts for each source. Query-only accou
 
 ## Clients, Docker, and Verification
 
-`zed-config-example.json` demonstrates a client configuration that passes only `-config /path/to/config.yaml`; keep DSNs in the client or supervisor environment. The generic tool surface and confirmation protocol are documented in `TOOLS_SCHEMA.md`.
+The primary local-client walkthrough is [Claude Desktop 与 Codex 本地接入指南](docs/getting-started-local-clients.md). It covers binary builds, stdio client configuration, Docker, source selection, confirmation, and troubleshooting. The generic tool surface and confirmation protocol are documented in `TOOLS_SCHEMA.md`.
+
+Zed is not part of that primary walkthrough. `zed-config-example.json` is a separate, credential-free optional example using Zed's current `context_servers` setting; keep DSNs in the Zed process environment.
 
 The Docker image includes only the binary and credential-free configuration example. Mount a real config file and pass DSN environment variables at runtime. The server is stdio-only and has no HTTP health endpoint.
 
