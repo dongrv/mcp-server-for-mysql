@@ -13,6 +13,7 @@ import (
 	"github.com/dongrv/mcp-server-for-mysql/internal/config"
 	"github.com/dongrv/mcp-server-for-mysql/internal/database"
 	"github.com/dongrv/mcp-server-for-mysql/internal/tools"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 func TestMultipleSameEngineSourceProfiles(t *testing.T) {
@@ -91,14 +92,40 @@ func assertInstanceMarker(t *testing.T, service *tools.Service, sourceID, table,
 	return serverUUID
 }
 
+func TestIsMySQLMissingTableError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "missing table", err: &mysql.MySQLError{Number: 1146}, want: true},
+		{name: "wrapped missing table", err: fmt.Errorf("query failed: %w", &mysql.MySQLError{Number: 1146}), want: true},
+		{name: "access denied", err: &mysql.MySQLError{Number: 1045}, want: false},
+		{name: "unrelated error", err: errors.New("context canceled"), want: false},
+		{name: "nil", err: nil, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isMySQLMissingTableError(tt.err); got != tt.want {
+				t.Fatalf("isMySQLMissingTableError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func isMySQLMissingTableError(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1146
+}
+
 func assertSourceCannotQueryTable(t *testing.T, service *tools.Service, sourceID, table string) {
 	t.Helper()
 	_, err := service.Query(context.Background(), tools.QueryInput{
 		RequestMeta: tools.RequestMeta{SourceID: sourceID},
 		SQL:         fmt.Sprintf("SELECT marker FROM %s", table),
 	})
-	if err == nil {
-		t.Fatalf("source %q unexpectedly queried table %q from the other MySQL instance", sourceID, table)
+	if !isMySQLMissingTableError(err) {
+		t.Fatalf("source %q query error for other-instance table %q = %v, want MySQL missing-table error 1146", sourceID, table, err)
 	}
 }
 
