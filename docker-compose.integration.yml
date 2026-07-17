@@ -1,0 +1,66 @@
+services:
+  mysql-orders:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: orders_test
+      MYSQL_USER: orders_test
+      MYSQL_PASSWORD: orders_test
+      MYSQL_ROOT_PASSWORD: root_test
+    ports:
+      - "127.0.0.1:${INTEGRATION_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-orders-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --protocol=TCP --host=127.0.0.1 --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}" --execute='SELECT 1' --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  mysql-logs:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: logs_test
+      MYSQL_USER: logs_test
+      MYSQL_PASSWORD: logs_test
+      MYSQL_ROOT_PASSWORD: root_test
+    ports:
+      - "127.0.0.1:${INTEGRATION_LOGS_MYSQL_PORT:-23306}:3306"
+    volumes:
+      - mysql-logs-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --protocol=TCP --host=127.0.0.1 --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}" --execute='SELECT 1' --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    environment:
+      CLICKHOUSE_DB: mcp_test
+      CLICKHOUSE_USER: mcp
+      CLICKHOUSE_PASSWORD: mcp
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:${INTEGRATION_CLICKHOUSE_HTTP_PORT:-18123}:8123"
+      - "127.0.0.1:${INTEGRATION_CLICKHOUSE_PORT:-19000}:9000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --host 127.0.0.1 --user "$${CLICKHOUSE_USER}" --password "$${CLICKHOUSE_PASSWORD}" --database "$${CLICKHOUSE_DB}" --query 'SELECT 1'
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  mysql-orders-data:
+  mysql-logs-data:

@@ -1,62 +1,9 @@
 {
-  "mcpServers": {
-    "mysql": {
-      "command": "D:\\work\\go\\src\\ai-generate\\auto-mcp-server\\mcp-mysql\\cmd.exe",
-      "env": {
-        "MYSQL_HOST": "localhost",
-        "MYSQL_PORT": "3306",
-        "MYSQL_USER": "root",
-        "MYSQL_PASSWORD": "root",
-        "MYSQL_DATABASE": "mcp_server",
-        "MYSQL_MAX_CONNS": "10",
-        "MYSQL_IDLE_CONNS": "5",
-        "MYSQL_CONN_LIFETIME_MINUTES": "30"
-      },
-      "disabled": false,
-      "autoApprove": [
-        "mysql_query",
-        "mysql_list_tables",
-        "mysql_describe_table",
-        "mysql_pool_status",
-        "mysql_add_columns",
-        "mysql_drop_columns",
-        "mysql_modify_columns",
-        "mysql_rename_table",
-        "mysql_copy_table",
-        "mysql_copy_table_structure"
-      ],
-      "alwaysAllow": [
-        "mysql_query",
-        "mysql_execute",
-        "mysql_begin_transaction",
-        "mysql_commit_transaction",
-        "mysql_rollback_transaction",
-        "mysql_list_tables",
-        "mysql_describe_table",
-        "mysql_create_table",
-        "mysql_drop_table",
-        "mysql_rename_table",
-        "mysql_copy_table",
-        "mysql_copy_table_structure",
-        "mysql_add_columns",
-        "mysql_drop_columns",
-        "mysql_modify_columns",
-        "mysql_create_index",
-        "mysql_drop_index",
-        "mysql_list_indexes",
-        "mysql_migrate",
-        "mysql_pool_status"
-      ]
-    }
-  },
-  "settings": {
-    "mcp": {
-      "mysql": {
-        "description": "MySQL MCP Server for database operations",
-        "timeout": 30000,
-        "maxRetries": 3,
-        "logLevel": "info"
-      }
+  "context_servers": {
+    "secure-database": {
+      "command": "/absolute/path/to/mcp-database",
+      "args": ["-config", "/absolute/path/to/config.yaml"],
+      "env": {}
     }
   }
 }

@@ -1,8 +1,8 @@
 .PHONY: all build run test clean fmt lint docker-build docker-run help
 
 # 项目信息
-PROJECT_NAME := mcp-mysql
-BINARY_NAME := mcp-mysql
+PROJECT_NAME := mcp-database
+BINARY_NAME := mcp-database
 VERSION := 1.0.0
 BUILD_TIME := $(shell date +%Y%m%d%H%M%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -21,8 +21,9 @@ BUILD_DIR := build
 DIST_DIR := dist
 
 # 构建标志
-LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
 BUILD_FLAGS := -trimpath
+CONFIG ?= config.yaml
+ENV_FILE ?= .env
 
 # 默认目标
 all: build
@@ -31,13 +32,13 @@ all: build
 build:
 	@echo "Building $(PROJECT_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO_BUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+	$(GO_BUILD) $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # 运行项目
 run:
 	@echo "Running $(PROJECT_NAME)..."
-	$(GO) run ./$(CMD_DIR)
+	$(GO) run ./$(CMD_DIR) -config $(CONFIG)
 
 # 运行测试
 test:
@@ -101,11 +102,9 @@ docker-build:
 # Docker 运行
 docker-run:
 	@echo "Running Docker container..."
-	docker run --rm -p 8080:8080 \
-		-e MYSQL_HOST=host.docker.internal \
-		-e MYSQL_PORT=3306 \
-		-e MYSQL_USER=root \
-		-e MYSQL_PASSWORD=password \
+	docker run --rm -i \
+		-v "$(abspath $(CONFIG)):/app/config.yaml:ro" \
+		--env-file $(ENV_FILE) \
 		$(PROJECT_NAME):latest
 
 # 显示帮助信息
