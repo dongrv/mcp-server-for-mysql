@@ -9,6 +9,25 @@ import (
 // MySQLDialect implements metadata access for MySQL.
 type MySQLDialect struct{}
 
+const mysqlIndexExpressionSupportQuery = `
+SELECT COUNT(*)
+FROM information_schema.columns
+WHERE table_schema = 'information_schema'
+  AND table_name = 'STATISTICS'
+  AND column_name = 'EXPRESSION'`
+
+const mysqlIndexesWithExpressionsQuery = `
+SELECT index_name, non_unique, index_type, column_name, expression
+FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND table_name = ?
+ORDER BY index_name, seq_in_index`
+
+const mysqlIndexesWithoutExpressionsQuery = `
+SELECT index_name, non_unique, index_type, column_name, NULL AS index_expression
+FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND table_name = ?
+ORDER BY index_name, seq_in_index`
+
 func (MySQLDialect) Name() string { return "mysql" }
 func (MySQLDialect) Capabilities() Capability {
 	return Capability{Transactions: true, AtomicBatches: true, CopyTable: true, AlterColumns: true}
@@ -90,11 +109,15 @@ ORDER BY ordinal_position`, tableName)
 }
 
 func mysqlIndexes(ctx context.Context, db *sql.DB, tableName string) ([]Index, error) {
-	rows, err := db.QueryContext(ctx, `
-SELECT index_name, non_unique, index_type, column_name, expression
-FROM information_schema.statistics
-WHERE table_schema = DATABASE() AND table_name = ?
-ORDER BY index_name, seq_in_index`, tableName)
+	supportsExpressions, err := mysqlSupportsIndexExpressions(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	query := mysqlIndexesWithoutExpressionsQuery
+	if supportsExpressions {
+		query = mysqlIndexesWithExpressionsQuery
+	}
+	rows, err := db.QueryContext(ctx, query, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("describe MySQL indexes: %w", err)
 	}
@@ -125,4 +148,12 @@ ORDER BY index_name, seq_in_index`, tableName)
 		return nil, fmt.Errorf("iterate MySQL indexes: %w", err)
 	}
 	return indexes, nil
+}
+
+func mysqlSupportsIndexExpressions(ctx context.Context, db *sql.DB) (bool, error) {
+	var count int
+	if err := db.QueryRowContext(ctx, mysqlIndexExpressionSupportQuery).Scan(&count); err != nil {
+		return false, fmt.Errorf("detect MySQL index expression support: %w", err)
+	}
+	return count > 0, nil
 }
